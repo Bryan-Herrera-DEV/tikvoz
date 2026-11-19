@@ -155,6 +155,16 @@ pub struct SocialMessage {
     pub action: i64,
 }
 
+/// Control del live: 3 = terminó, 4 = suspendido.
+#[derive(Clone, PartialEq, Message)]
+pub struct ControlMessage {
+    #[prost(int32, tag = "2")]
+    pub action: i32,
+}
+
+pub const CONTROL_STREAM_ENDED: i32 = 3;
+pub const CONTROL_STREAM_SUSPENDED: i32 = 4;
+
 #[cfg(test)]
 mod tests {
     use super::*;
