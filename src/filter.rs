@@ -3,6 +3,9 @@
 //! Todo aquí es puro (sin IO) para poder testearlo fácil. El objetivo es que el
 //! TTS no lea basura: links, cadenas de emojis, "jajajajajajaja" de 80 letras, etc.
 
+use std::collections::VecDeque;
+use std::time::{Duration, Instant};
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -199,6 +202,40 @@ fn truncate_chars(text: &str, max: usize) -> String {
     }
 }
 
+/// Recuerda qué dijo cada usuario hace poco para no leer el mismo mensaje
+/// repetido (en lives de ventas la gente pega la misma pregunta 5 veces).
+pub struct RepeatGuard {
+    window: Duration,
+    seen: VecDeque<(Instant, String)>,
+}
+
+impl RepeatGuard {
+    pub fn new(window: Duration) -> Self {
+        Self { window, seen: VecDeque::new() }
+    }
+
+    pub fn set_window(&mut self, window: Duration) {
+        self.window = window;
+    }
+
+    /// `true` si es nuevo (y lo registra); `false` si es una repetición reciente.
+    pub fn check(&mut self, user: &str, text: &str, now: Instant) -> bool {
+        while self
+            .seen
+            .front()
+            .is_some_and(|(t, _)| now.duration_since(*t) > self.window)
+        {
+            self.seen.pop_front();
+        }
+        let key = format!("{}\u{1f}{}", user.to_lowercase(), text.to_lowercase());
+        if self.seen.iter().any(|(_, k)| *k == key) {
+            return false;
+        }
+        self.seen.push_back((now, key));
+        true
+    }
+}
+
 /// Sustituye `{usuario}` y `{mensaje}` en la plantilla de lectura.
 pub fn render_template(template: &str, user: &str, message: &str) -> String {
     let out = template.replace("{usuario}", user).replace("{mensaje}", message);
@@ -280,6 +317,16 @@ mod tests {
     fn limpia_nombres() {
         assert_eq!(clean_name("✨Ana✨"), "Ana");
         assert_eq!(clean_name("🔥🔥"), "");
+    }
+
+    #[test]
+    fn repeat_guard_ignora_repeticiones_dentro_de_la_ventana() {
+        let mut g = RepeatGuard::new(Duration::from_secs(60));
+        let t0 = Instant::now();
+        assert!(g.check("ana", "Hola", t0));
+        assert!(!g.check("ANA", "hola", t0 + Duration::from_secs(10)));
+        assert!(g.check("luis", "hola", t0 + Duration::from_secs(10)));
+        assert!(g.check("ana", "hola", t0 + Duration::from_secs(61)));
     }
 
     #[test]
