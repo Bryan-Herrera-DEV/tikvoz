@@ -46,8 +46,41 @@ struct RoomUser {
     status: i32,
 }
 
-/// Resuelve el `room_id` del live actual de un usuario.
+/// Resuelve el `room_id` del live actual de un usuario. Si la API JSON falla
+/// (TikTok a veces responde vacío cuando limita), cae al HTML de `/@usuario/live`.
 pub async fn fetch_room_id(http: &Client, unique_id: &str) -> Result<i64, LiveError> {
+    match fetch_room_id_api(http, unique_id).await {
+        Err(LiveError::Other(reason)) => {
+            log::debug!("API de room falló ({reason}), probando HTML");
+            fetch_room_id_html(http, unique_id).await
+        }
+        other => other,
+    }
+}
+
+async fn fetch_room_id_html(http: &Client, unique_id: &str) -> Result<i64, LiveError> {
+    let html = http
+        .get(format!("https://www.tiktok.com/@{unique_id}/live"))
+        .send()
+        .await
+        .map_err(LiveError::net)?
+        .text()
+        .await
+        .map_err(LiveError::net)?;
+    extract_room_id_from_html(&html).ok_or(LiveError::Offline)
+}
+
+/// Busca el primer `"roomId":"<dígitos>"` no vacío en el HTML de la página del live.
+fn extract_room_id_from_html(html: &str) -> Option<i64> {
+    const KEY: &str = "\"roomId\":\"";
+    html.match_indices(KEY).find_map(|(i, _)| {
+        let rest = &html[i + KEY.len()..];
+        let digits: &str = &rest[..rest.find('"')?];
+        digits.parse::<i64>().ok().filter(|id| *id > 0)
+    })
+}
+
+async fn fetch_room_id_api(http: &Client, unique_id: &str) -> Result<i64, LiveError> {
     let resp = http
         .get(TIKTOK_ROOM_API)
         .query(&[
@@ -175,5 +208,12 @@ mod tests {
         let raw = "ttwid=1%7Cabc; Path=/; Domain=.tiktok.com; Expires=Wed, 21 Oct 2026 07:28:00 GMT; HttpOnly, \
                    msToken=xyz; Secure";
         assert_eq!(parse_set_cookie(raw), "ttwid=1%7Cabc; msToken=xyz");
+    }
+
+    #[test]
+    fn extrae_room_id_del_html() {
+        let html = r#"..."roomId":"","x":1,"roomId":"7710713113872829205","status":2"#;
+        assert_eq!(extract_room_id_from_html(html), Some(7710713113872829205));
+        assert_eq!(extract_room_id_from_html(r#""roomId":"""#), None);
     }
 }
