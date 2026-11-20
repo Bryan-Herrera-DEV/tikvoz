@@ -70,6 +70,7 @@ pub struct App {
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        install_fallback_fonts(&cc.egui_ctx);
         let settings: Settings = cc
             .storage
             .and_then(|s| eframe::get_value(s, eframe::APP_KEY))
@@ -343,10 +344,10 @@ impl App {
             egui::CollapsingHeader::new("🔊 Voz").default_open(true).show(ui, |ui| {
                 self.voice_settings(ui);
             });
-            egui::CollapsingHeader::new("📢 Qué leer").default_open(true).show(ui, |ui| {
+            egui::CollapsingHeader::new("💬 Qué leer").default_open(true).show(ui, |ui| {
                 self.read_settings(ui);
             });
-            egui::CollapsingHeader::new("🧹 Filtros").default_open(false).show(ui, |ui| {
+            egui::CollapsingHeader::new("🚫 Filtros").default_open(false).show(ui, |ui| {
                 self.filter_settings(ui);
             });
             egui::CollapsingHeader::new("⚙ Avanzado").default_open(false).show(ui, |ui| {
@@ -543,6 +544,30 @@ impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, &self.settings);
     }
+}
+
+/// Las fuentes de egui no traen símbolos como ● → ni las letras "fancy" que la
+/// gente usa en sus nicks (𝓓, ℜ...). Las tomamos de las fuentes del sistema como
+/// respaldo; si no existen (otro SO) se sigue con las de egui.
+fn install_fallback_fonts(ctx: &egui::Context) {
+    const CANDIDATES: &[&str] = &[
+        r"C:\Windows\Fonts\segoeui.ttf",
+        r"C:\Windows\Fonts\seguisym.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+    ];
+    let mut fonts = egui::FontDefinitions::default();
+    for path in CANDIDATES {
+        let Ok(bytes) = std::fs::read(path) else { continue };
+        let name = path.to_string();
+        fonts
+            .font_data
+            .insert(name.clone(), Arc::new(egui::FontData::from_owned(bytes)));
+        for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+            fonts.families.entry(family).or_default().push(name.clone());
+        }
+    }
+    ctx.set_fonts(fonts);
 }
 
 fn simple_outcome(history: bool, enabled: bool) -> Outcome {
