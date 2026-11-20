@@ -4,6 +4,7 @@
 mod app;
 mod config;
 mod filter;
+mod monitor;
 mod speech;
 mod tiktok;
 

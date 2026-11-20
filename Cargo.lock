@@ -2794,6 +2794,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "tts",
+ "windows-sys 0.59.0",
  "winresource",
 ]
 

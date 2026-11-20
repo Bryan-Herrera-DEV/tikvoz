@@ -10,6 +10,7 @@ use eframe::egui::{self, Color32, RichText};
 
 use crate::config::{Settings, Theme};
 use crate::filter::{self, RepeatGuard};
+use crate::monitor::Monitor;
 use crate::speech::{EngineInfo, Speaker};
 use crate::tiktok::{LiveClient, LiveEvent, Status};
 
@@ -64,6 +65,7 @@ pub struct App {
     feed: VecDeque<FeedItem>,
     repeats: RepeatGuard,
     paused: bool,
+    monitor: Option<Monitor>,
     test_text: String,
     show_api_key: bool,
 }
@@ -105,6 +107,7 @@ impl App {
             room_id: None,
             feed: VecDeque::with_capacity(FEED_CAP),
             paused: false,
+            monitor: None,
             test_text: "Hola, así sonarán los comentarios de tu live.".into(),
             show_api_key: false,
         };
@@ -352,7 +355,40 @@ impl App {
             .current()
             .map(|t| format!("🔊 {t}"))
             .unwrap_or_else(|| if self.paused { "⏸ En pausa".into() } else { "🔇 En silencio".into() });
-        ui.add(egui::Label::new(RichText::new(now).italics()).truncate());
+        ui.horizontal(|ui| {
+            self.monitor_label(ui);
+            ui.add(egui::Label::new(RichText::new(now).italics()).truncate());
+        });
+    }
+
+    /// Consumo del propio programa (esquina inferior izquierda).
+    fn monitor_label(&self, ui: &mut egui::Ui) {
+        let Some(m) = &self.monitor else { return };
+        let text = match m.snapshot() {
+            None => "CPU –  RAM –".to_string(),
+            Some(s) => {
+                let mut t = format!("CPU {:.1}%  RAM {:.0} MB", s.cpu_percent, s.ram_mb);
+                if let (Some(g), Some(v)) = (s.gpu_percent, s.vram_mb) {
+                    t.push_str(&format!("  GPU {g:.0}%  VRAM {v:.0} MB"));
+                }
+                t
+            }
+        };
+        ui.label(RichText::new(text).monospace().weak())
+            .on_hover_text("Consumo solo de TikVoz. RAM = memoria privada.");
+        ui.separator();
+    }
+
+    /// Arranca o detiene el hilo del monitor según el ajuste.
+    fn sync_monitor(&mut self, ctx: &egui::Context) {
+        match (self.settings.show_monitor, self.monitor.is_some()) {
+            (true, false) => {
+                let ctx = ctx.clone();
+                self.monitor = Some(Monitor::start(move || ctx.request_repaint()));
+            }
+            (false, true) => self.monitor = None,
+            _ => {}
+        }
     }
 
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
@@ -458,6 +494,7 @@ impl App {
         ui.add(egui::Slider::new(&mut s.max_queue, 1..=100).text("máx. en cola"))
             .on_hover_text("Si se llena, se descartan los más viejos: así nunca vas atrasado.");
         ui.checkbox(&mut s.auto_connect, "Conectar al abrir la app");
+        ui.checkbox(&mut s.show_monitor, "Mostrar consumo (CPU, RAM, GPU)");
         ui.label("API key de Euler Stream (opcional):");
         ui.horizontal(|ui| {
             ui.add(
@@ -535,6 +572,7 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.drain_events();
+        self.sync_monitor(ctx);
 
         egui::TopBottomPanel::top("top").show(ctx, |ui| {
             ui.add_space(4.0);

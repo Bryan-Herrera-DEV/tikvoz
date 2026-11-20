@@ -17,6 +17,8 @@ pub enum Theme {
 #[serde(default)]
 pub struct Settings {
     pub theme: Theme,
+    /// Muestra CPU/RAM/GPU del programa en la esquina inferior izquierda.
+    pub show_monitor: bool,
     pub username: String,
     /// API key opcional de Euler Stream (sube el límite de conexiones).
     pub api_key: String,
@@ -48,6 +50,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: Theme::Sistema,
+            show_monitor: true,
             username: String::new(),
             api_key: String::new(),
             auto_connect: false,
