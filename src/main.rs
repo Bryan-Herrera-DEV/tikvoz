@@ -20,6 +20,9 @@ fn main() -> eframe::Result {
         // Sin vsync forzado ni MSAA: la UI es 2D y solo repinta ante eventos.
         vsync: true,
         multisampling: 0,
+        // Solo guardamos los ajustes, no la geometría: si la app se cierra a la
+        // fuerza durante el arranque eframe puede guardar una ventana de 64x64.
+        persist_window: false,
         ..Default::default()
     };
 
