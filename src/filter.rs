@@ -127,9 +127,7 @@ fn replace_links(text: &str) -> String {
 fn strip_unspeakable(text: &str) -> String {
     text.chars()
         .map(|c| {
-            if c.is_alphanumeric() || c.is_whitespace() {
-                c
-            } else if ".,;:¿?¡!'\"-()%$&+=/".contains(c) {
+            if c.is_alphanumeric() || c.is_whitespace() || ".,;:¿?¡!'\"-()%$&+=/".contains(c) {
                 c
             } else {
                 ' '
