@@ -109,7 +109,13 @@ impl App {
         };
         app.pick_default_voice();
         app.push_voice_settings(true);
-        if app.settings.auto_connect && !app.settings.username.trim().is_empty() {
+
+        // `tikvoz.exe usuario` conecta directo (útil para accesos directos).
+        let cli_user = std::env::args().nth(1).filter(|u| !u.trim().is_empty());
+        if let Some(user) = &cli_user {
+            app.settings.username = user.clone();
+        }
+        if (cli_user.is_some() || app.settings.auto_connect) && !app.settings.username.trim().is_empty() {
             app.connect();
         }
         app
