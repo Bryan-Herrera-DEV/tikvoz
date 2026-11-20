@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, RichText};
 
-use crate::config::Settings;
+use crate::config::{Settings, Theme};
 use crate::filter::{self, RepeatGuard};
 use crate::speech::{EngineInfo, Speaker};
 use crate::tiktok::{LiveClient, LiveEvent, Status};
@@ -108,6 +108,7 @@ impl App {
             test_text: "Hola, así sonarán los comentarios de tu live.".into(),
             show_api_key: false,
         };
+        app.apply_theme(&cc.egui_ctx);
         app.pick_default_voice();
         app.push_voice_settings(true);
 
@@ -120,6 +121,14 @@ impl App {
             app.connect();
         }
         app
+    }
+
+    fn apply_theme(&self, ctx: &egui::Context) {
+        ctx.set_theme(match self.settings.theme {
+            Theme::Sistema => egui::ThemePreference::System,
+            Theme::Oscuro => egui::ThemePreference::Dark,
+            Theme::Claro => egui::ThemePreference::Light,
+        });
     }
 
     /// Si no hay voz guardada, prefiere una en español.
@@ -285,25 +294,32 @@ impl App {
                 self.connect();
             }
             ui.separator();
+            let v = ui.visuals();
             let (color, text) = match &self.status {
-                Status::Idle => (Color32::GRAY, "Desconectado".to_string()),
-                Status::Connecting(t) => (Color32::from_rgb(230, 180, 40), t.clone()),
-                Status::Live(t) => (Color32::from_rgb(60, 200, 90), t.clone()),
-                Status::Waiting(t) => (Color32::from_rgb(230, 150, 40), t.clone()),
-                Status::Error(t) => (Color32::from_rgb(230, 70, 70), t.clone()),
+                Status::Idle => (v.weak_text_color(), "Desconectado".to_string()),
+                Status::Connecting(t) => (v.warn_fg_color, t.clone()),
+                Status::Live(t) => (Color32::from_rgb(40, 170, 80), t.clone()),
+                Status::Waiting(t) => (v.warn_fg_color, t.clone()),
+                Status::Error(t) => (v.error_fg_color, t.clone()),
             };
             ui.label(RichText::new("●").color(color));
-            let label = ui.label(text);
+            let label = ui.add(egui::Label::new(text).truncate());
             if let Some(room) = self.room_id {
                 label.on_hover_text(format!("Sala {room}"));
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let t = &mut self.settings.theme;
+                ui.selectable_value(t, Theme::Claro, "☀").on_hover_text("Tema claro");
+                ui.selectable_value(t, Theme::Oscuro, "🌙").on_hover_text("Tema oscuro");
+                ui.selectable_value(t, Theme::Sistema, "💻").on_hover_text("Seguir al sistema");
+            });
         });
     }
 
     fn bottom_bar(&mut self, ui: &mut egui::Ui) {
         let Some(sp) = self.speaker.clone() else {
             ui.colored_label(
-                Color32::from_rgb(230, 70, 70),
+                ui.visuals().error_fg_color,
                 format!(
                     "Motor de voz no disponible: {}",
                     self.engine_error.as_deref().unwrap_or("desconocido")
@@ -483,7 +499,8 @@ impl App {
                         let dim = item.outcome != Outcome::Spoken;
                         let name = RichText::new(display_name(&item.nickname, &item.handle)).strong();
                         ui.label(item.kind.icon());
-                        ui.label(if dim { name.weak() } else { name.color(Color32::from_rgb(120, 180, 255)) });
+                        let accent = ui.visuals().hyperlink_color;
+                        ui.label(if dim { name.weak() } else { name.color(accent) });
                         let text = RichText::new(&item.text);
                         ui.label(if dim { text.weak() } else { text });
                         match &item.outcome {
@@ -536,6 +553,9 @@ impl eframe::App for App {
             .show(ctx, |ui| self.settings_panel(ui));
         egui::CentralPanel::default().show(ctx, |ui| self.feed_panel(ui));
 
+        if self.settings.theme != self.applied.theme {
+            self.apply_theme(ctx);
+        }
         if self.settings != self.applied {
             self.push_voice_settings(false);
         }

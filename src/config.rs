@@ -5,9 +5,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::filter::FilterConfig;
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum Theme {
+    #[default]
+    Sistema,
+    Oscuro,
+    Claro,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct Settings {
+    pub theme: Theme,
     pub username: String,
     /// API key opcional de Euler Stream (sube el límite de conexiones).
     pub api_key: String,
@@ -38,6 +47,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            theme: Theme::Sistema,
             username: String::new(),
             api_key: String::new(),
             auto_connect: false,
