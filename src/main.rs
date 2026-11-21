@@ -5,6 +5,7 @@ mod app;
 mod config;
 mod filter;
 mod monitor;
+mod profanity;
 mod speech;
 mod tiktok;
 
