@@ -93,10 +93,6 @@ impl Profanity {
         Self { rules }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.rules.is_empty()
-    }
-
     pub fn contains(&self, text: &str) -> bool {
         !self.find(text).is_empty()
     }
@@ -453,6 +449,6 @@ mod tests {
         assert!(f.contains("t0nt0te"));
         assert!(f.contains("f e o"));
         assert!(!f.contains("feote"));
-        assert!(Profanity::new("").is_empty());
+        assert!(!Profanity::new("").contains("pito"));
     }
 }
