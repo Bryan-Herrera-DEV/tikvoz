@@ -14,9 +14,9 @@ use tokio_tungstenite::tungstenite::{self, client::IntoClientRequest, http::Head
 use super::api::{SignedConnect, USER_AGENT};
 use super::proto::{
     self, BaseMessage, ChatMessage, ControlMessage, FetchResult, GiftMessage, HeartBeat,
-    ImEnterRoom, PushFrame, SocialMessage, User,
+    ImEnterRoom, MemberMessage, PushFrame, SocialMessage, User,
 };
-use super::{LiveError, LiveEvent};
+use super::{LiveError, LiveEvent, Viewer};
 
 const DEFAULT_HEARTBEAT: Duration = Duration::from_secs(10);
 /// Si no llega nada (ni datos ni heartbeat del server) en este tiempo, la conexión está muerta.
@@ -233,8 +233,9 @@ fn dispatch(
         match m.method.as_str() {
             "WebcastChatMessage" => {
                 if let Ok(c) = ChatMessage::decode(m.payload.as_slice()) {
-                    let (nickname, handle) = names(c.user);
-                    emit(LiveEvent::Comment { nickname, handle, text: c.content, history });
+                    let user = viewer(c.user);
+                    log::trace!("chat seguidor={} moderador={}", user.follower, user.moderator);
+                    emit(LiveEvent::Comment { user, text: c.content, history });
                 }
             }
             "WebcastGiftMessage" => {
@@ -245,10 +246,8 @@ fn dispatch(
                     if gift.r#type == 1 && g.repeat_end == 0 {
                         continue;
                     }
-                    let (nickname, handle) = names(g.user);
                     emit(LiveEvent::Gift {
-                        nickname,
-                        handle,
+                        user: viewer(g.user),
                         gift: gift.name,
                         count: g.repeat_count.max(1) as u32,
                         diamonds: gift.diamond_count.max(0) as u32,
@@ -258,11 +257,17 @@ fn dispatch(
             }
             "WebcastSocialMessage" => {
                 if let Ok(s) = SocialMessage::decode(m.payload.as_slice()) {
-                    let (nickname, handle) = names(s.user);
                     match s.action {
-                        1 => emit(LiveEvent::Follow { nickname, handle, history }),
-                        3 => emit(LiveEvent::Share { nickname, handle, history }),
+                        1 => emit(LiveEvent::Follow { user: viewer(s.user), history }),
+                        3 => emit(LiveEvent::Share { user: viewer(s.user), history }),
                         _ => {}
+                    }
+                }
+            }
+            "WebcastMemberMessage" if !history => {
+                if let Ok(m) = MemberMessage::decode(m.payload.as_slice()) {
+                    if m.action == 1 {
+                        emit(LiveEvent::Join { user: viewer(m.user) });
                     }
                 }
             }
@@ -281,9 +286,15 @@ fn dispatch(
     false
 }
 
-fn names(user: Option<User>) -> (String, String) {
+fn viewer(user: Option<User>) -> Viewer {
     let u = user.unwrap_or_default();
-    (u.nickname, u.display_id)
+    let attr = u.user_attr.unwrap_or_default();
+    Viewer {
+        follower: u.follow_info.is_some_and(|f| f.follow_status >= 1),
+        moderator: attr.is_admin || attr.is_super_admin,
+        nickname: u.nickname,
+        handle: u.display_id,
+    }
 }
 
 fn map_ws_error(e: tungstenite::Error) -> LiveError {

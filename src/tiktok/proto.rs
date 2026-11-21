@@ -108,9 +108,38 @@ pub struct User {
     pub id: i64,
     #[prost(string, tag = "3")]
     pub nickname: String,
+    /// Relación con el streamer (0 nada, 1 seguidor, 2 amigos).
+    #[prost(message, optional, tag = "22")]
+    pub follow_info: Option<FollowInfo>,
+    #[prost(message, optional, tag = "32")]
+    pub user_attr: Option<UserAttr>,
     /// El @handle.
     #[prost(string, tag = "38")]
     pub display_id: String,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct FollowInfo {
+    #[prost(int64, tag = "3")]
+    pub follow_status: i64,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct UserAttr {
+    #[prost(bool, tag = "2")]
+    pub is_admin: bool,
+    #[prost(bool, tag = "3")]
+    pub is_super_admin: bool,
+}
+
+/// Alguien entró al live.
+#[derive(Clone, PartialEq, Message)]
+pub struct MemberMessage {
+    #[prost(message, optional, tag = "2")]
+    pub user: Option<User>,
+    /// 1 = se unió.
+    #[prost(int32, tag = "10")]
+    pub action: i32,
 }
 
 #[derive(Clone, PartialEq, Message)]
@@ -176,6 +205,7 @@ mod tests {
                 id: 7,
                 nickname: "Ana".into(),
                 display_id: "ana_01".into(),
+                ..Default::default()
             }),
             content: "hola".into(),
         };

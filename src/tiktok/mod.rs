@@ -5,6 +5,7 @@
 //! y recibe `LiveEvent`s por un canal estándar.
 
 mod api;
+pub mod demo;
 mod proto;
 mod session;
 
@@ -19,10 +20,22 @@ use tokio::task::JoinHandle;
 pub enum LiveEvent {
     Status(Status),
     Connected { room_id: i64 },
-    Comment { nickname: String, handle: String, text: String, history: bool },
-    Gift { nickname: String, handle: String, gift: String, count: u32, diamonds: u32, history: bool },
-    Follow { nickname: String, handle: String, history: bool },
-    Share { nickname: String, handle: String, history: bool },
+    Comment { user: Viewer, text: String, history: bool },
+    Gift { user: Viewer, gift: String, count: u32, diamonds: u32, history: bool },
+    Follow { user: Viewer, history: bool },
+    Share { user: Viewer, history: bool },
+    Join { user: Viewer },
+}
+
+/// Quién hizo algo en el live.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Viewer {
+    pub nickname: String,
+    /// El @handle (sin @).
+    pub handle: String,
+    /// Sigue al streamer (o son amigos).
+    pub follower: bool,
+    pub moderator: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
