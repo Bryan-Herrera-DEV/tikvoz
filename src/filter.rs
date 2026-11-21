@@ -23,7 +23,28 @@ pub struct FilterConfig {
     pub blocked_words: String,
     /// Usuarios (@usuario o nick) separados por coma que nunca se leen.
     pub blocked_users: String,
+    /// `true`: las palabras bloqueadas se leen como "piip"; `false`: se omite el comentario.
+    pub censor_instead_of_skip: bool,
+    /// Si no está vacío, solo se leen comentarios que empiecen con esto (y se quita).
+    pub required_prefix: String,
+    /// Diccionario de pronunciación, una regla por línea: `xd = equis de`.
+    pub dictionary: String,
 }
+
+/// Abreviaturas típicas del chat en español para que la voz las diga bien.
+pub const DEFAULT_DICTIONARY: &str = "xd = equis de
+q = que
+k = que
+pq = porque
+tqm = te quiero mucho
+tkm = te quiero mucho
+bn = bien
+xq = porque
+npi = ni idea
+dnd = dónde
+grax = gracias
+wtf = qué
+ntp = no te preocupes";
 
 impl Default for FilterConfig {
     fn default() -> Self {
@@ -34,6 +55,9 @@ impl Default for FilterConfig {
             skip_commands: true,
             blocked_words: String::new(),
             blocked_users: String::new(),
+            censor_instead_of_skip: false,
+            required_prefix: String::new(),
+            dictionary: DEFAULT_DICTIONARY.into(),
         }
     }
 }
@@ -49,12 +73,24 @@ pub fn clean_comment(raw: &str, user_ids: &[&str], cfg: &FilterConfig) -> Option
         return None;
     }
 
-    let trimmed = raw.trim();
-    if cfg.skip_commands && trimmed.starts_with('!') {
+    let mut trimmed = raw.trim();
+    let prefix = cfg.required_prefix.trim();
+    if !prefix.is_empty() {
+        let head = trimmed.get(..prefix.len())?;
+        if !head.eq_ignore_ascii_case(prefix) {
+            return None;
+        }
+        trimmed = trimmed[prefix.len()..].trim_start();
+    } else if cfg.skip_commands && trimmed.starts_with('!') {
         return None;
     }
+    let censored;
     if contains_blocked_word(trimmed, &cfg.blocked_words) {
-        return None;
+        if !cfg.censor_instead_of_skip {
+            return None;
+        }
+        censored = censor(trimmed, &cfg.blocked_words);
+        trimmed = &censored;
     }
 
     let mut text = if cfg.strip_links {
@@ -64,6 +100,7 @@ pub fn clean_comment(raw: &str, user_ids: &[&str], cfg: &FilterConfig) -> Option
     };
     text = strip_unspeakable(&text);
     text = collapse_runs(&text);
+    text = apply_dictionary(&text, &cfg.dictionary);
     text = collapse_whitespace(&text);
 
     if text.chars().filter(|c| c.is_alphanumeric()).count() < cfg.min_chars.max(1) {
@@ -100,6 +137,58 @@ fn is_user_blocked(user_ids: &[&str], blocked: &str) -> bool {
 fn contains_blocked_word(text: &str, blocked: &str) -> bool {
     let lower = text.to_lowercase();
     split_list(blocked).any(|w| lower.contains(&w))
+}
+
+/// Aplica `f` a cada palabra (secuencia alfanumérica) y conserva el resto tal cual.
+fn map_words(text: &str, mut f: impl FnMut(&str) -> Option<String>) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut word = String::new();
+    let mut flush = |word: &mut String, out: &mut String| {
+        if !word.is_empty() {
+            match f(word) {
+                Some(r) => out.push_str(&r),
+                None => out.push_str(word),
+            }
+            word.clear();
+        }
+    };
+    for c in text.chars() {
+        if c.is_alphanumeric() {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
+/// Reemplaza palabras completas según el diccionario (`clave = valor` por línea).
+pub fn apply_dictionary(text: &str, dictionary: &str) -> String {
+    let rules: Vec<(String, &str)> = dictionary
+        .lines()
+        .filter_map(|l| {
+            let (k, v) = l.split_once('=')?;
+            let k = k.trim().to_lowercase();
+            (!k.is_empty()).then(|| (k, v.trim()))
+        })
+        .collect();
+    if rules.is_empty() {
+        return text.to_string();
+    }
+    map_words(text, |w| {
+        let lw = w.to_lowercase();
+        rules.iter().find(|(k, _)| *k == lw).map(|(_, v)| v.to_string())
+    })
+}
+
+fn censor(text: &str, blocked: &str) -> String {
+    let words: Vec<String> = split_list(blocked).collect();
+    map_words(text, |w| {
+        let lw = w.to_lowercase();
+        words.iter().any(|b| lw.contains(b.as_str())).then(|| "piip".to_string())
+    })
 }
 
 fn replace_links(text: &str) -> String {
@@ -325,6 +414,31 @@ mod tests {
         assert!(!g.check("ANA", "hola", t0 + Duration::from_secs(10)));
         assert!(g.check("luis", "hola", t0 + Duration::from_secs(10)));
         assert!(g.check("ana", "hola", t0 + Duration::from_secs(61)));
+    }
+
+    #[test]
+    fn diccionario_reemplaza_palabras_completas() {
+        let d = "xd = equis de
+q = que";
+        assert_eq!(apply_dictionary("XD q risa, qué", d), "equis de que risa, qué");
+        assert_eq!(apply_dictionary("xdxd", d), "xdxd");
+    }
+
+    #[test]
+    fn censura_en_vez_de_omitir() {
+        let c = FilterConfig {
+            blocked_words: "tonto".into(),
+            censor_instead_of_skip: true,
+            ..cfg()
+        };
+        assert_eq!(clean_comment("eres un TONTO jaja", &[], &c).as_deref(), Some("eres un piip jaja"));
+    }
+
+    #[test]
+    fn prefijo_obligatorio() {
+        let c = FilterConfig { required_prefix: "!v".into(), ..cfg() };
+        assert_eq!(clean_comment("hola", &[], &c), None);
+        assert_eq!(clean_comment("!V hola a todos", &[], &c).as_deref(), Some("hola a todos"));
     }
 
     #[test]
