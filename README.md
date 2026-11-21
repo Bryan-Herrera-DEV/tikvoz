@@ -44,7 +44,7 @@ La mayoría de los lectores de chat para TikTok son webs, apps Electron de cient
 | Precio | **Gratis** | Freemium o suscripción |
 | Voz | Local, offline, sin límite | Muchas veces en la nube y con cuota |
 | Latencia de la voz | **~140 ms** | 0,5–2 s (ida y vuelta a la nube) |
-| RAM | **~85–100 MB** | 250–600 MB (Electron o navegador) |
+| RAM | **~85–105 MB** | 250–600 MB (Electron o navegador) |
 | Voz por usuario, VIP, prioridad, diccionario | ✅ | 💰 normalmente de pago |
 | Código abierto | ✅ | ❌ |
 
@@ -296,7 +296,7 @@ Medido con el binario de release en Windows 11, con un live real y en modo demo:
 | Métrica | Valor |
 |---|---|
 | Tamaño del `.exe` | ~6,5 MB |
-| RAM privada | ~85–100 MB, estable en sesiones largas |
+| RAM privada | ~85–105 MB, estable en sesiones largas |
 | CPU en reposo / con un live activo | ~0 % / < 1 % |
 | Latencia de la voz | ~140 ms la primera frase, ~10 ms entre frases |
 | Costo del monitor de consumo | ~1,6 ms por segundo + ~6 MB (contadores de Windows) |
