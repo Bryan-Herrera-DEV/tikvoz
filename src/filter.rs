@@ -19,11 +19,18 @@ pub struct FilterConfig {
     pub strip_links: bool,
     /// Ignora comentarios que empiezan por `!` (comandos de bots).
     pub skip_commands: bool,
-    /// Palabras prohibidas separadas por coma: si aparece alguna, no se lee.
+    /// Obsoleto (versiones anteriores): se migra a `bad_words` al abrir la app.
+    #[serde(skip_serializing_if = "String::is_empty")]
     pub blocked_words: String,
+    /// Lista de groserías para el detector avanzado (ver `profanity.rs`).
+    pub bad_words: String,
+    /// Tras cuántas groserías se silencia automáticamente al usuario (0 = nunca).
+    pub auto_ban_strikes: u32,
+    /// Si el nombre del usuario es una grosería, se lee "alguien".
+    pub censor_names: bool,
     /// Usuarios (@usuario o nick) separados por coma que nunca se leen.
     pub blocked_users: String,
-    /// `true`: las palabras bloqueadas se leen como "piip"; `false`: se omite el comentario.
+    /// `true`: las groserías se leen como "piip"; `false`: se omite el comentario.
     pub censor_instead_of_skip: bool,
     /// Si no está vacío, solo se leen comentarios que empiecen con esto (y se quita).
     pub required_prefix: String,
@@ -54,6 +61,9 @@ impl Default for FilterConfig {
             strip_links: true,
             skip_commands: true,
             blocked_words: String::new(),
+            bad_words: crate::profanity::DEFAULT_BAD_WORDS.into(),
+            auto_ban_strikes: 3,
+            censor_names: true,
             blocked_users: String::new(),
             censor_instead_of_skip: false,
             required_prefix: String::new(),
@@ -83,14 +93,6 @@ pub fn clean_comment(raw: &str, user_ids: &[&str], cfg: &FilterConfig) -> Option
         trimmed = trimmed[prefix.len()..].trim_start();
     } else if cfg.skip_commands && trimmed.starts_with('!') {
         return None;
-    }
-    let censored;
-    if contains_blocked_word(trimmed, &cfg.blocked_words) {
-        if !cfg.censor_instead_of_skip {
-            return None;
-        }
-        censored = censor(trimmed, &cfg.blocked_words);
-        trimmed = &censored;
     }
 
     let mut text = if cfg.strip_links {
@@ -134,11 +136,6 @@ fn is_user_blocked(user_ids: &[&str], blocked: &str) -> bool {
     })
 }
 
-fn contains_blocked_word(text: &str, blocked: &str) -> bool {
-    let lower = text.to_lowercase();
-    split_list(blocked).any(|w| lower.contains(&w))
-}
-
 /// Aplica `f` a cada palabra (secuencia alfanumérica) y conserva el resto tal cual.
 fn map_words(text: &str, mut f: impl FnMut(&str) -> Option<String>) -> String {
     let mut out = String::with_capacity(text.len());
@@ -180,14 +177,6 @@ pub fn apply_dictionary(text: &str, dictionary: &str) -> String {
     map_words(text, |w| {
         let lw = w.to_lowercase();
         rules.iter().find(|(k, _)| *k == lw).map(|(_, v)| v.to_string())
-    })
-}
-
-fn censor(text: &str, blocked: &str) -> String {
-    let words: Vec<String> = split_list(blocked).collect();
-    map_words(text, |w| {
-        let lw = w.to_lowercase();
-        words.iter().any(|b| lw.contains(b.as_str())).then(|| "piip".to_string())
     })
 }
 
@@ -380,13 +369,11 @@ mod tests {
     }
 
     #[test]
-    fn bloquea_palabras_y_usuarios() {
+    fn bloquea_usuarios() {
         let c = FilterConfig {
-            blocked_words: "spam, feo".into(),
             blocked_users: "@troll123".into(),
             ..cfg()
         };
-        assert_eq!(clean_comment("esto es SPAM", &[], &c), None);
         assert_eq!(clean_comment("hola", &["troll123", "Troll"], &c), None);
         assert!(clean_comment("hola", &["amigo"], &c).is_some());
     }
@@ -422,16 +409,6 @@ mod tests {
 q = que";
         assert_eq!(apply_dictionary("XD q risa, qué", d), "equis de que risa, qué");
         assert_eq!(apply_dictionary("xdxd", d), "xdxd");
-    }
-
-    #[test]
-    fn censura_en_vez_de_omitir() {
-        let c = FilterConfig {
-            blocked_words: "tonto".into(),
-            censor_instead_of_skip: true,
-            ..cfg()
-        };
-        assert_eq!(clean_comment("eres un TONTO jaja", &[], &c).as_deref(), Some("eres un piip jaja"));
     }
 
     #[test]

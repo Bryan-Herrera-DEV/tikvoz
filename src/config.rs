@@ -19,7 +19,10 @@ pub struct Settings {
     pub theme: Theme,
     /// Muestra CPU/RAM/GPU del programa en la esquina inferior izquierda.
     pub show_monitor: bool,
+    /// Usuario de TikTok.
     pub username: String,
+    /// Canal de Kick (slug).
+    pub kick_channel: String,
     /// API key opcional de Euler Stream (sube el límite de conexiones).
     pub api_key: String,
     pub auto_connect: bool,
@@ -43,6 +46,9 @@ pub struct Settings {
     pub read_joins: bool,
     pub show_joins: bool,
     pub join_template: String,
+    pub read_subs: bool,
+    pub sub_template: String,
+    pub gifted_sub_template: String,
 
     pub voice_per_user: bool,
     pub priority_gifts: bool,
@@ -64,6 +70,7 @@ impl Default for Settings {
             theme: Theme::Sistema,
             show_monitor: true,
             username: String::new(),
+            kick_channel: String::new(),
             api_key: String::new(),
             auto_connect: false,
             voice_id: None,
@@ -82,6 +89,9 @@ impl Default for Settings {
             read_joins: false,
             show_joins: false,
             join_template: "Bienvenido {usuario}".into(),
+            read_subs: true,
+            sub_template: "{usuario} se suscribió".into(),
+            gifted_sub_template: "{usuario} regaló {cantidad} suscripciones".into(),
             voice_per_user: false,
             priority_gifts: true,
             mods_priority: true,
@@ -96,6 +106,18 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Adapta ajustes guardados por versiones anteriores.
+    pub fn migrate(&mut self) {
+        // v0.1 tenía "palabras bloqueadas" por substring; pasan al detector avanzado.
+        let old = std::mem::take(&mut self.filter.blocked_words);
+        for w in old.split(',').map(str::trim).filter(|w| !w.is_empty()) {
+            if !self.filter.bad_words.split([',', '\n']).any(|b| b.trim().eq_ignore_ascii_case(w)) {
+                self.filter.bad_words.push_str(", ");
+                self.filter.bad_words.push_str(w);
+            }
+        }
+    }
+
     pub fn api_key(&self) -> Option<String> {
         let k = self.api_key.trim();
         (!k.is_empty()).then(|| k.to_string())
@@ -114,5 +136,14 @@ mod tests {
         assert_eq!(s.rate, 1.5);
         assert_eq!(s.max_queue, Settings::default().max_queue);
         assert_eq!(s.filter, FilterConfig::default());
+    }
+
+    #[test]
+    fn migra_palabras_bloqueadas_viejas() {
+        let mut s: Settings = serde_json::from_str(r#"{"filter":{"blocked_words":"spam, puto"}}"#).unwrap();
+        s.migrate();
+        assert!(s.filter.blocked_words.is_empty());
+        assert!(s.filter.bad_words.ends_with(", spam"));
+        assert_eq!(s.filter.bad_words.matches("puto").count(), 1);
     }
 }
