@@ -1,0 +1,22 @@
+name: Release
+
+# Publica tikvoz.exe al crear un tag, p. ej.: git tag v0.2.0 && git push --tags
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: target/release/tikvoz.exe
+          generate_release_notes: true
