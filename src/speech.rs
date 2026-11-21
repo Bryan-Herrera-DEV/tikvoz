@@ -37,8 +37,24 @@ pub struct EngineInfo {
     pub max_volume: f32,
 }
 
+/// Un mensaje a leer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Utterance {
+    pub text: String,
+    /// Voz específica para este mensaje (p. ej. voz por usuario); `None` = la principal.
+    pub voice: Option<String>,
+    /// Se adelanta a los mensajes normales (regalos, VIP, moderadores).
+    pub priority: bool,
+}
+
+impl Utterance {
+    pub fn plain(text: String) -> Self {
+        Self { text, voice: None, priority: false }
+    }
+}
+
 enum Cmd {
-    Enqueue(String),
+    Enqueue(Utterance),
     SayNow(String),
     Skip,
     Clear,
@@ -111,8 +127,8 @@ impl Speaker {
         let _ = self.tx.send(cmd);
     }
 
-    pub fn enqueue(&self, text: String) {
-        self.send(Cmd::Enqueue(text));
+    pub fn enqueue(&self, u: Utterance) {
+        self.send(Cmd::Enqueue(u));
     }
     /// Corta lo que está sonando y lee esto ya (para probar la voz).
     pub fn say_now(&self, text: String) {
@@ -170,8 +186,13 @@ struct Worker {
     tts: Tts,
     rx: Receiver<Cmd>,
     shared: Arc<Shared>,
-    queue: VecDeque<String>,
+    queue: VecDeque<Utterance>,
+    /// Mensajes prioritarios: se leen antes que `queue`.
+    priority: VecDeque<Utterance>,
     max_queue: usize,
+    /// Voz principal elegida en la UI y la que está cargada ahora en el motor.
+    main_voice: Option<String>,
+    loaded_voice: Option<String>,
     paused: bool,
     speaking: bool,
     on_change: Box<dyn Fn() + Send>,
@@ -190,7 +211,10 @@ impl Worker {
             rx,
             shared,
             queue: VecDeque::new(),
+            priority: VecDeque::new(),
             max_queue: max_queue.max(1),
+            main_voice: None,
+            loaded_voice: None,
             paused: false,
             speaking: false,
             on_change,
@@ -215,28 +239,25 @@ impl Worker {
 
     fn handle(&mut self, cmd: Cmd) {
         match cmd {
-            Cmd::Enqueue(text) => {
-                self.queue.push_back(text);
+            Cmd::Enqueue(u) => {
+                if u.priority {
+                    self.priority.push_back(u);
+                } else {
+                    self.queue.push_back(u);
+                }
                 self.trim_queue();
             }
             Cmd::SayNow(text) => {
                 self.stop_current();
-                self.speak(text);
+                self.speak(Utterance::plain(text));
             }
             Cmd::Skip => self.stop_current(),
             Cmd::Clear => {
                 self.queue.clear();
+                self.priority.clear();
                 self.stop_current();
             }
-            Cmd::SetVoice(id) => {
-                if let Ok(voices) = self.tts.voices() {
-                    if let Some(v) = voices.iter().find(|v| v.id() == id) {
-                        if let Err(e) = self.tts.set_voice(v) {
-                            log::warn!("no se pudo cambiar la voz: {e}");
-                        }
-                    }
-                }
-            }
+            Cmd::SetVoice(id) => self.main_voice = Some(id),
             Cmd::SetRate(r) => {
                 let _ = self.tts.set_rate(r.clamp(self.tts.min_rate(), self.tts.max_rate()));
             }
@@ -266,17 +287,32 @@ impl Worker {
             self.set_current(None);
         }
         if !self.speaking && !self.paused {
-            if let Some(next) = self.queue.pop_front() {
+            if let Some(next) = self.priority.pop_front().or_else(|| self.queue.pop_front()) {
                 self.speak(next);
             }
         }
     }
 
-    fn speak(&mut self, text: String) {
-        match self.tts.speak(text.as_str(), false) {
+    /// Carga la voz pedida solo si es distinta de la actual (cambiar de voz cuesta).
+    fn ensure_voice(&mut self, wanted: Option<&String>) {
+        let Some(id) = wanted.or(self.main_voice.as_ref()).cloned() else { return };
+        if self.loaded_voice.as_ref() == Some(&id) {
+            return;
+        }
+        if let Some(v) = self.tts.voices().ok().and_then(|vs| vs.into_iter().find(|v| v.id() == id)) {
+            match self.tts.set_voice(&v) {
+                Ok(()) => self.loaded_voice = Some(id),
+                Err(e) => log::warn!("no se pudo cambiar la voz: {e}"),
+            }
+        }
+    }
+
+    fn speak(&mut self, u: Utterance) {
+        self.ensure_voice(u.voice.as_ref());
+        match self.tts.speak(u.text.as_str(), false) {
             Ok(_) => {
                 self.speaking = true;
-                self.set_current(Some(text));
+                self.set_current(Some(u.text));
             }
             Err(e) => log::warn!("error al hablar: {e}"),
         }
@@ -291,9 +327,12 @@ impl Worker {
         }
     }
 
+    /// Descarta lo más viejo cuando se supera el tope (primero lo normal).
     fn trim_queue(&mut self) {
-        while self.queue.len() > self.max_queue {
-            self.queue.pop_front();
+        while self.queue.len() + self.priority.len() > self.max_queue {
+            if self.queue.pop_front().is_none() {
+                self.priority.pop_front();
+            }
             self.shared.dropped.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -306,7 +345,9 @@ impl Worker {
     }
 
     fn publish(&self) {
-        self.shared.queued.store(self.queue.len(), Ordering::Relaxed);
+        self.shared
+            .queued
+            .store(self.queue.len() + self.priority.len(), Ordering::Relaxed);
         (self.on_change)();
     }
 }
