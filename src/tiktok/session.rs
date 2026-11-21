@@ -16,7 +16,8 @@ use super::proto::{
     self, BaseMessage, ChatMessage, ControlMessage, FetchResult, GiftMessage, HeartBeat,
     ImEnterRoom, MemberMessage, PushFrame, SocialMessage, User,
 };
-use super::{LiveError, LiveEvent, Viewer};
+use super::LiveError;
+use crate::live::{LiveEvent, Platform, Viewer};
 
 const DEFAULT_HEARTBEAT: Duration = Duration::from_secs(10);
 /// Si no llega nada (ni datos ni heartbeat del server) en este tiempo, la conexión está muerta.
@@ -89,7 +90,6 @@ pub async fn run(
         .unwrap_or(DEFAULT_HEARTBEAT);
 
     log::info!("WebSocket conectado (sala {room_id}, heartbeat {heartbeat:?})");
-    emit(LiveEvent::Connected { room_id });
 
     let mut dedup = Dedup::new(1024);
     // El primer lote viene del servidor de firmas: son comentarios recientes,
@@ -234,7 +234,7 @@ fn dispatch(
             "WebcastChatMessage" => {
                 if let Ok(c) = ChatMessage::decode(m.payload.as_slice()) {
                     let user = viewer(c.user);
-                    log::trace!("chat seguidor={} moderador={}", user.follower, user.moderator);
+                    log::trace!("chat seguidor={:?} moderador={}", user.follower, user.moderator);
                     emit(LiveEvent::Comment { user, text: c.content, history });
                 }
             }
@@ -290,10 +290,9 @@ fn viewer(user: Option<User>) -> Viewer {
     let u = user.unwrap_or_default();
     let attr = u.user_attr.unwrap_or_default();
     Viewer {
-        follower: u.follow_info.is_some_and(|f| f.follow_status >= 1),
+        follower: Some(u.follow_info.is_some_and(|f| f.follow_status >= 1)),
         moderator: attr.is_admin || attr.is_super_admin,
-        nickname: u.nickname,
-        handle: u.display_id,
+        ..Viewer::new(Platform::TikTok, u.nickname, u.display_id)
     }
 }
 

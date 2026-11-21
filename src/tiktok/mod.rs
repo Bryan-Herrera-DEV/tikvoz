@@ -5,48 +5,16 @@
 //! y recibe `LiveEvent`s por un canal estándar.
 
 mod api;
-pub mod demo;
 mod proto;
 mod session;
 
 use std::fmt;
-use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
 
-#[derive(Debug, Clone)]
-pub enum LiveEvent {
-    Status(Status),
-    Connected { room_id: i64 },
-    Comment { user: Viewer, text: String, history: bool },
-    Gift { user: Viewer, gift: String, count: u32, diamonds: u32, history: bool },
-    Follow { user: Viewer, history: bool },
-    Share { user: Viewer, history: bool },
-    Join { user: Viewer },
-}
-
-/// Quién hizo algo en el live.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Viewer {
-    pub nickname: String,
-    /// El @handle (sin @).
-    pub handle: String,
-    /// Sigue al streamer (o son amigos).
-    pub follower: bool,
-    pub moderator: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum Status {
-    Idle,
-    Connecting(String),
-    Live(String),
-    /// Esperando a que el usuario inicie el live (o reintentando tras un error).
-    Waiting(String),
-    Error(String),
-}
+use crate::live::{Backoff, Emit, LiveEvent, Platform, Status};
 
 #[derive(Debug, Clone)]
 pub enum LiveError {
@@ -79,8 +47,6 @@ enum Cmd {
     Connect { username: String, api_key: Option<String> },
     Disconnect,
 }
-
-pub type Emit = Arc<dyn Fn(LiveEvent) + Send + Sync>;
 
 #[derive(Clone)]
 pub struct LiveClient {
@@ -120,7 +86,7 @@ async fn supervisor(mut rx: UnboundedReceiver<Cmd>, emit: Emit) {
             Cmd::Connect { username, api_key } => {
                 task = Some(tokio::spawn(keep_connected(username, api_key, emit.clone())));
             }
-            Cmd::Disconnect => emit(LiveEvent::Status(Status::Idle)),
+            Cmd::Disconnect => emit(LiveEvent::Status(Platform::TikTok, Status::Idle)),
         }
     }
 }
@@ -128,12 +94,12 @@ async fn supervisor(mut rx: UnboundedReceiver<Cmd>, emit: Emit) {
 /// Mantiene la conexión viva: si el live no ha empezado espera, si se cae reconecta
 /// con backoff exponencial.
 async fn keep_connected(username: String, api_key: Option<String>, emit: Emit) {
-    let status = |s: Status| emit(LiveEvent::Status(s));
+    let status = |s: Status| emit(LiveEvent::Status(Platform::TikTok, s));
     let http = match api::http_client() {
         Ok(c) => c,
         Err(e) => return status(Status::Error(format!("no se pudo crear cliente HTTP: {e}"))),
     };
-    let mut backoff = Duration::from_secs(2);
+    let mut backoff = Backoff::default();
 
     loop {
         status(Status::Connecting(format!("Conectando con @{username}…")));
@@ -147,12 +113,12 @@ async fn keep_connected(username: String, api_key: Option<String>, emit: Emit) {
 
         let wait = match result {
             Ok(session::SessionEnd::StreamEnded) => {
-                backoff = Duration::from_secs(2);
+                backoff.reset();
                 status(Status::Waiting(format!("@{username} terminó el live; esperando que vuelva…")));
                 Duration::from_secs(30)
             }
             Ok(session::SessionEnd::SocketClosed) => {
-                backoff = Duration::from_secs(2);
+                backoff.reset();
                 status(Status::Waiting("Conexión cerrada por TikTok, reconectando…".into()));
                 Duration::from_secs(1)
             }
@@ -160,13 +126,12 @@ async fn keep_connected(username: String, api_key: Option<String>, emit: Emit) {
                 return status(Status::Error(format!("@{username}: {}", LiveError::UserNotFound)));
             }
             Err(LiveError::Offline) => {
-                backoff = Duration::from_secs(2);
+                backoff.reset();
                 status(Status::Waiting(format!("@{username} no está en vivo; reintento en 30 s")));
                 Duration::from_secs(30)
             }
             Err(e) => {
-                let wait = backoff;
-                backoff = (backoff * 2).min(Duration::from_secs(60));
+                let wait = backoff.next_wait();
                 log::warn!("{e}");
                 status(Status::Waiting(format!("{e} — reintento en {} s", wait.as_secs())));
                 wait
