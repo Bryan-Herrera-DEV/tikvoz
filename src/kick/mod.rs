@@ -9,7 +9,7 @@
 //!    a `chatrooms.<id>.v2` y compañía. El servidor manda `{}` cada 25 s y hay que
 //!    responder `{}`; el token se renueva con `refresh` antes de que expire.
 
-mod events;
+pub mod events;
 mod session;
 
 use std::fmt;

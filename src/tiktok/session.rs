@@ -205,6 +205,22 @@ fn parse_ping_interval(options: &str) -> Option<Duration> {
     })
 }
 
+/// Decodifica un frame binario del WebSocket (protobuf + gzip) y emite sus
+/// eventos, sin red. Es el camino que recorre cada lote de mensajes de TikTok;
+/// lo usan los benchmarks. Devuelve cuántos mensajes traía el lote.
+#[doc(hidden)]
+pub fn decode_frame(data: &[u8], emit: &(dyn Fn(LiveEvent) + Send + Sync)) -> usize {
+    let Ok(push) = PushFrame::decode(data) else {
+        return 0;
+    };
+    let Ok(result) = decode_fetch_result(&push) else {
+        return 0;
+    };
+    let mut dedup = Dedup::new(1024);
+    dispatch(&result.messages, false, &mut dedup, emit);
+    result.messages.len()
+}
+
 fn decode_fetch_result(push: &PushFrame) -> Result<FetchResult, String> {
     let gzip = push
         .headers

@@ -5,8 +5,10 @@
 //! y recibe `LiveEvent`s por un canal estándar.
 
 mod api;
-mod proto;
+pub mod proto;
 mod session;
+
+pub use session::decode_frame;
 
 use std::fmt;
 use std::time::Duration;
