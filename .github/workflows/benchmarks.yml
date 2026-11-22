@@ -1,0 +1,118 @@
+name: Benchmarks
+
+# Compara el rendimiento de un PR contra su rama base en la MISMA máquina.
+# Diseño A-B-A: base → PR → base. La diferencia entre las dos mediciones de la
+# base estima el ruido de cada benchmark (ver scripts/bench-compare.ps1).
+# El resultado aparece en el resumen del run y el check falla si hay una
+# regresión real o si el .exe crece más de lo permitido.
+#
+# Es seguro para PRs desde forks: usa `pull_request` (permisos de solo lectura y
+# sin secretos), nunca `pull_request_target`.
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "benches/**"
+      - "build.rs"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "scripts/bench-compare.ps1"
+      - ".github/workflows/benchmarks.yml"
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "Rama o commit contra el que comparar"
+        default: main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Umbrales: regresión si empeora más de max(THRESHOLD, 2 × ruido).
+  THRESHOLD: "10"
+  SIZE_THRESHOLD: "5"
+
+jobs:
+  comparar:
+    name: Base contra PR (A-B-A)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Preparar
+        shell: pwsh
+        run: |
+          $base = "${{ github.event.pull_request.base.sha }}"
+          if (-not $base) { $base = git rev-parse "origin/${{ inputs.base }}" 2>$null }
+          if (-not $base) { $base = git rev-parse "${{ inputs.base }}" }
+          "BASE_SHA=$base" >> $env:GITHUB_ENV
+          "HEAD_SHA=$(git rev-parse HEAD)" >> $env:GITHUB_ENV
+          # El script del PR se usa para comparar aunque luego cambiemos a la base.
+          Copy-Item scripts/bench-compare.ps1 "$env:RUNNER_TEMP/bench-compare.ps1"
+          Remove-Item target/criterion -Recurse -Force -ErrorAction SilentlyContinue
+          Write-Host "Base: $base · PR: $(git rev-parse HEAD)"
+
+      - name: "A: medir la base"
+        shell: pwsh
+        run: |
+          git checkout --quiet $env:BASE_SHA
+          if (Test-Path benches/rendimiento.rs) {
+            cargo bench --locked --bench rendimiento -- --save-baseline base
+            if ($LASTEXITCODE -ne 0) { throw "cargo bench falló en la base" }
+            "HAS_BASE=true" >> $env:GITHUB_ENV
+          } else {
+            Write-Host "La base todavía no tiene benchmarks: solo se medirá el PR."
+          }
+          cargo build --release --locked
+          if ($LASTEXITCODE -ne 0) { throw "no compila la base" }
+          Copy-Item target/release/tikvoz.exe "$env:RUNNER_TEMP/base.exe"
+
+      - name: "B: medir el PR"
+        shell: pwsh
+        run: |
+          git checkout --quiet $env:HEAD_SHA
+          cargo bench --locked --bench rendimiento -- --save-baseline pr
+          if ($LASTEXITCODE -ne 0) { throw "cargo bench falló en el PR" }
+          cargo build --release --locked
+          if ($LASTEXITCODE -ne 0) { throw "no compila el PR" }
+          Copy-Item target/release/tikvoz.exe "$env:RUNNER_TEMP/pr.exe"
+
+      - name: "A: medir la base otra vez (estima el ruido)"
+        if: env.HAS_BASE == 'true'
+        shell: pwsh
+        run: |
+          git checkout --quiet $env:BASE_SHA
+          cargo bench --locked --bench rendimiento -- --save-baseline base2
+          if ($LASTEXITCODE -ne 0) { throw "cargo bench falló en la base (2.ª medición)" }
+          git checkout --quiet $env:HEAD_SHA
+
+      - name: Comparar
+        shell: pwsh
+        run: |
+          $params = @{
+            Base = "base"; New = "pr"
+            Threshold = [double]$env:THRESHOLD; SizeThreshold = [double]$env:SIZE_THRESHOLD
+            BaseExe = "$env:RUNNER_TEMP/base.exe"; NewExe = "$env:RUNNER_TEMP/pr.exe"
+            Summary = $env:GITHUB_STEP_SUMMARY
+          }
+          if ($env:HAS_BASE -eq "true") { $params.Base2 = "base2" }
+          & "$env:RUNNER_TEMP/bench-compare.ps1" @params
+          exit $LASTEXITCODE
+
+      - name: Guardar resultados de Criterion
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-${{ github.sha }}
+          path: target/criterion
+          retention-days: 14
