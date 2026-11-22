@@ -5,8 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Lint, tests y build
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,5 +19,27 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test
+
+      - run: cargo clippy --all-targets --locked -- -D warnings
+      - run: cargo test --locked
+
+      # Build de desarrollo descargable desde la pestaña Actions (14 días).
+      - name: Empaquetar
+        if: github.event_name == 'push'
+        shell: pwsh
+        run: ./scripts/package.ps1
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push'
+        with:
+          name: tikvoz-${{ github.sha }}-windows-x64
+          path: dist/*.zip
+          retention-days: 14
+
+  msrv:
+    name: Compila con Rust 1.84 (MSRV)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.84
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked

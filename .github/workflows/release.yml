@@ -1,22 +1,67 @@
 name: Release
 
-# Publica tikvoz.exe al crear un tag, p. ej.: git tag v0.2.0 && git push --tags
+# Publica una versión en GitHub Releases al subir un tag:
+#   git tag -a v1.0.0 -m "TikVoz 1.0.0" && git push origin v1.0.0
+# Los tags con guion (v1.1.0-beta.1) se publican como "pre-release".
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*.*.*"]
 
 permissions:
-  contents: write
+  contents: write       # crear la release y subir archivos
+  id-token: write       # firmar la procedencia del build (attestation)
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   windows:
+    name: Windows x64
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Verificar que el tag coincide con Cargo.toml
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $cargo = Get-Content Cargo.toml -Raw
+          if ($cargo -notmatch '(?ms)^\[package\].*?^version\s*=\s*"([^"]+)"') { throw "Sin versión en Cargo.toml" }
+          if ($Matches[1] -ne $tag) { throw "El tag v$tag no coincide con Cargo.toml ($($Matches[1]))" }
+
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release
-      - uses: softprops/action-gh-release@v2
         with:
-          files: target/release/tikvoz.exe
-          generate_release_notes: true
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Lint y tests
+        run: |
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --locked
+
+      - name: Compilar y empaquetar
+        shell: pwsh
+        run: ./scripts/package.ps1
+
+      # Prueba verificable de que el .exe salió de este repo y de este commit
+      # (gh attestation verify <archivo> --repo <dueño>/<repo>).
+      - name: Atestación de procedencia
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.exe
+            dist/*.zip
+
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: TikVoz ${{ github.ref_name }}
+          body_path: dist/RELEASE_NOTES.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.exe
+            dist/*.zip
+            dist/SHA256SUMS.txt
