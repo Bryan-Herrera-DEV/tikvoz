@@ -44,7 +44,10 @@ impl fmt::Display for LiveError {
 }
 
 enum Cmd {
-    Connect { username: String, api_key: Option<String> },
+    Connect {
+        username: String,
+        api_key: Option<String>,
+    },
     Disconnect,
 }
 
@@ -56,13 +59,15 @@ pub struct LiveClient {
 impl LiveClient {
     pub fn spawn(emit: Emit) -> std::io::Result<Self> {
         let (tx, rx) = unbounded_channel();
-        std::thread::Builder::new().name("tiktok".into()).spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("runtime tokio");
-            rt.block_on(supervisor(rx, emit));
-        })?;
+        std::thread::Builder::new()
+            .name("tiktok".into())
+            .spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("runtime tokio");
+                rt.block_on(supervisor(rx, emit));
+            })?;
         Ok(Self { tx })
     }
 
@@ -84,7 +89,11 @@ async fn supervisor(mut rx: UnboundedReceiver<Cmd>, emit: Emit) {
         }
         match cmd {
             Cmd::Connect { username, api_key } => {
-                task = Some(tokio::spawn(keep_connected(username, api_key, emit.clone())));
+                task = Some(tokio::spawn(keep_connected(
+                    username,
+                    api_key,
+                    emit.clone(),
+                )));
             }
             Cmd::Disconnect => emit(LiveEvent::Status(Platform::TikTok, Status::Idle)),
         }
@@ -114,26 +123,38 @@ async fn keep_connected(username: String, api_key: Option<String>, emit: Emit) {
         let wait = match result {
             Ok(session::SessionEnd::StreamEnded) => {
                 backoff.reset();
-                status(Status::Waiting(format!("@{username} terminó el live; esperando que vuelva…")));
+                status(Status::Waiting(format!(
+                    "@{username} terminó el live; esperando que vuelva…"
+                )));
                 Duration::from_secs(30)
             }
             Ok(session::SessionEnd::SocketClosed) => {
                 backoff.reset();
-                status(Status::Waiting("Conexión cerrada por TikTok, reconectando…".into()));
+                status(Status::Waiting(
+                    "Conexión cerrada por TikTok, reconectando…".into(),
+                ));
                 Duration::from_secs(1)
             }
             Err(LiveError::UserNotFound) => {
-                return status(Status::Error(format!("@{username}: {}", LiveError::UserNotFound)));
+                return status(Status::Error(format!(
+                    "@{username}: {}",
+                    LiveError::UserNotFound
+                )));
             }
             Err(LiveError::Offline) => {
                 backoff.reset();
-                status(Status::Waiting(format!("@{username} no está en vivo; reintento en 30 s")));
+                status(Status::Waiting(format!(
+                    "@{username} no está en vivo; reintento en 30 s"
+                )));
                 Duration::from_secs(30)
             }
             Err(e) => {
                 let wait = backoff.next_wait();
                 log::warn!("{e}");
-                status(Status::Waiting(format!("{e} — reintento en {} s", wait.as_secs())));
+                status(Status::Waiting(format!(
+                    "{e} — reintento en {} s",
+                    wait.as_secs()
+                )));
                 wait
             }
         };

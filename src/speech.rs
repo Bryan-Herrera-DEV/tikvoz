@@ -49,7 +49,11 @@ pub struct Utterance {
 
 impl Utterance {
     pub fn plain(text: String) -> Self {
-        Self { text, voice: None, priority: false }
+        Self {
+            text,
+            voice: None,
+            priority: false,
+        }
     }
 }
 
@@ -98,7 +102,10 @@ pub struct Speaker {
 
 impl Speaker {
     /// Arranca el hilo de voz. Devuelve el handle y la info del motor (voces, rangos).
-    pub fn spawn(max_queue: usize, on_change: impl Fn() + Send + 'static) -> Result<(Self, EngineInfo)> {
+    pub fn spawn(
+        max_queue: usize,
+        on_change: impl Fn() + Send + 'static,
+    ) -> Result<(Self, EngineInfo)> {
         let (tx, rx) = mpsc::channel();
         let (info_tx, info_rx) = mpsc::channel();
         let shared = Arc::new(Shared::default());
@@ -259,7 +266,9 @@ impl Worker {
             }
             Cmd::SetVoice(id) => self.main_voice = Some(id),
             Cmd::SetRate(r) => {
-                let _ = self.tts.set_rate(r.clamp(self.tts.min_rate(), self.tts.max_rate()));
+                let _ = self
+                    .tts
+                    .set_rate(r.clamp(self.tts.min_rate(), self.tts.max_rate()));
             }
             Cmd::SetVolume(v) => {
                 let _ = self
@@ -295,11 +304,18 @@ impl Worker {
 
     /// Carga la voz pedida solo si es distinta de la actual (cambiar de voz cuesta).
     fn ensure_voice(&mut self, wanted: Option<&String>) {
-        let Some(id) = wanted.or(self.main_voice.as_ref()).cloned() else { return };
+        let Some(id) = wanted.or(self.main_voice.as_ref()).cloned() else {
+            return;
+        };
         if self.loaded_voice.as_ref() == Some(&id) {
             return;
         }
-        if let Some(v) = self.tts.voices().ok().and_then(|vs| vs.into_iter().find(|v| v.id() == id)) {
+        if let Some(v) = self
+            .tts
+            .voices()
+            .ok()
+            .and_then(|vs| vs.into_iter().find(|v| v.id() == id))
+        {
             match self.tts.set_voice(&v) {
                 Ok(()) => self.loaded_voice = Some(id),
                 Err(e) => log::warn!("no se pudo cambiar la voz: {e}"),

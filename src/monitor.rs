@@ -81,11 +81,17 @@ fn sampler(stats: Arc<Stats>, stop: Arc<AtomicBool>, on_sample: impl Fn()) {
         if stop.load(Ordering::Relaxed) {
             break;
         }
-        stats.cpu_centi.store((cpu.sample() * 100.0) as u32, Ordering::Relaxed);
-        stats.ram_bytes.store(win::private_bytes(), Ordering::Relaxed);
+        stats
+            .cpu_centi
+            .store((cpu.sample() * 100.0) as u32, Ordering::Relaxed);
+        stats
+            .ram_bytes
+            .store(win::private_bytes(), Ordering::Relaxed);
         if let Some(g) = &gpu {
             if let Some((util, vram)) = g.sample() {
-                stats.gpu_centi.store((util * 100.0) as u32, Ordering::Relaxed);
+                stats
+                    .gpu_centi
+                    .store((util * 100.0) as u32, Ordering::Relaxed);
                 stats.vram_bytes.store(vram, Ordering::Relaxed);
             }
         }
@@ -137,7 +143,10 @@ mod win {
     fn process_cpu_100ns() -> u64 {
         // SAFETY: punteros a FILETIME locales válidos.
         unsafe {
-            let z = FILETIME { dwLowDateTime: 0, dwHighDateTime: 0 };
+            let z = FILETIME {
+                dwLowDateTime: 0,
+                dwHighDateTime: 0,
+            };
             let (mut c, mut e, mut k, mut u) = (z, z, z, z);
             if GetProcessTimes(GetCurrentProcess(), &mut c, &mut e, &mut k, &mut u) != 0 {
                 ft(k) + ft(u)
@@ -201,7 +210,9 @@ mod win {
                 let mut engines = 0isize;
                 let mut memory = 0isize;
                 let p1 = wide(&format!(r"\GPU Engine(pid_{pid}_*)\Utilization Percentage"));
-                let p2 = wide(&format!(r"\GPU Process Memory(pid_{pid}_*)\Dedicated Usage"));
+                let p2 = wide(&format!(
+                    r"\GPU Process Memory(pid_{pid}_*)\Dedicated Usage"
+                ));
                 if PdhAddEnglishCounterW(query, p1.as_ptr(), 0, &mut engines) != 0
                     || PdhAddEnglishCounterW(query, p2.as_ptr(), 0, &mut memory) != 0
                 {
@@ -210,7 +221,11 @@ mod win {
                 }
                 // Primera muestra: los contadores de tasa necesitan dos lecturas.
                 PdhCollectQueryData(query);
-                Some(Self { query, engines, memory })
+                Some(Self {
+                    query,
+                    engines,
+                    memory,
+                })
             }
         }
 
@@ -229,7 +244,11 @@ mod win {
                 let kind = name.rsplit("engtype_").next().unwrap_or("").to_string();
                 *by_engine.entry(kind).or_default() += value;
             }
-            let util = by_engine.values().cloned().fold(0.0, f64::max).clamp(0.0, 100.0);
+            let util = by_engine
+                .values()
+                .cloned()
+                .fold(0.0, f64::max)
+                .clamp(0.0, 100.0);
             let vram: f64 = read_array(self.memory).into_iter().map(|(_, v)| v).sum();
             Some((util as f32, vram.max(0.0) as u64))
         }
@@ -263,7 +282,9 @@ mod win {
             let mut buf: Vec<PDH_FMT_COUNTERVALUE_ITEM_W> =
                 Vec::with_capacity((size as usize).div_ceil(item));
             let items = buf.as_mut_ptr();
-            if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, items) != 0 {
+            if PdhGetFormattedCounterArrayW(counter, PDH_FMT_DOUBLE, &mut size, &mut count, items)
+                != 0
+            {
                 return Vec::new();
             }
             (0..count as usize)

@@ -29,13 +29,35 @@ impl Platform {
 #[derive(Debug, Clone)]
 pub enum LiveEvent {
     Status(Platform, Status),
-    Comment { user: Viewer, text: String, history: bool },
-    Gift { user: Viewer, gift: String, count: u32, diamonds: u32, history: bool },
-    Follow { user: Viewer, history: bool },
-    Share { user: Viewer, history: bool },
-    Join { user: Viewer },
+    Comment {
+        user: Viewer,
+        text: String,
+        history: bool,
+    },
+    Gift {
+        user: Viewer,
+        gift: String,
+        count: u32,
+        diamonds: u32,
+        history: bool,
+    },
+    Follow {
+        user: Viewer,
+        history: bool,
+    },
+    Share {
+        user: Viewer,
+        history: bool,
+    },
+    Join {
+        user: Viewer,
+    },
     /// Suscripción propia (`gifted == 0`) o suscripciones regaladas (`gifted > 0`).
-    Subscription { user: Viewer, months: u32, gifted: u32 },
+    Subscription {
+        user: Viewer,
+        months: u32,
+        gifted: u32,
+    },
 }
 
 /// Quién hizo algo en el live.

@@ -116,7 +116,12 @@ impl Settings {
         // v0.1 tenía "palabras bloqueadas" por substring; pasan al detector avanzado.
         let old = std::mem::take(&mut self.filter.blocked_words);
         for w in old.split(',').map(str::trim).filter(|w| !w.is_empty()) {
-            if !self.filter.bad_words.split([',', '\n']).any(|b| b.trim().eq_ignore_ascii_case(w)) {
+            if !self
+                .filter
+                .bad_words
+                .split([',', '\n'])
+                .any(|b| b.trim().eq_ignore_ascii_case(w))
+            {
                 self.filter.bad_words.push_str(", ");
                 self.filter.bad_words.push_str(w);
             }
@@ -157,7 +162,8 @@ mod tests {
 
     #[test]
     fn migra_palabras_bloqueadas_viejas() {
-        let mut s: Settings = serde_json::from_str(r#"{"filter":{"blocked_words":"spam, puto"}}"#).unwrap();
+        let mut s: Settings =
+            serde_json::from_str(r#"{"filter":{"blocked_words":"spam, puto"}}"#).unwrap();
         s.migrate();
         assert!(s.filter.blocked_words.is_empty());
         assert!(s.filter.bad_words.ends_with(", spam"));

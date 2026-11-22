@@ -135,7 +135,11 @@ fn entries(list: &str) -> Vec<(String, String)> {
             category = line[1..line.len() - 1].trim().to_lowercase();
             continue;
         }
-        for w in line.split([',', ';']).map(str::trim).filter(|w| !w.is_empty()) {
+        for w in line
+            .split([',', ';'])
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+        {
             out.push((category.clone(), w.to_string()));
         }
     }
@@ -144,7 +148,11 @@ fn entries(list: &str) -> Vec<(String, String)> {
 
 /// Letras normalizadas de una palabra/frase, sin separadores ni repeticiones.
 fn letters(word: &str) -> Vec<char> {
-    normalize(word).into_iter().map(|u| u.ch).filter(|c| *c != WILDCARD).collect()
+    normalize(word)
+        .into_iter()
+        .map(|u| u.ch)
+        .filter(|c| *c != WILDCARD)
+        .collect()
 }
 
 /// Letra normalizada con su origen en el texto.
@@ -237,7 +245,11 @@ impl Profanity {
         // Texto que se *ve* distinto de como está escrito: lo leemos como se ve.
         for alt in alternate_readings(text) {
             if let Some(h) = self.find_in(&alt).into_iter().next() {
-                return vec![Hit { start: 0, end: text.len(), ..h }];
+                return vec![Hit {
+                    start: 0,
+                    end: text.len(),
+                    ..h
+                }];
             }
         }
         Vec::new()
@@ -250,7 +262,11 @@ impl Profanity {
         while i < units.len() {
             let token_start = i == 0 || units[i - 1].token != units[i].token;
             if let Some((end, rule)) = self.match_at(&units, i, token_start) {
-                let start = if token_start { i } else { token_begin(&units, i) };
+                let start = if token_start {
+                    i
+                } else {
+                    token_begin(&units, i)
+                };
                 if !self.is_allowed(&units, start, end) {
                     hits.push(Hit {
                         start: units[start].start,
@@ -282,11 +298,18 @@ impl Profanity {
     }
 
     /// Intenta cada regla en `i`; devuelve el índice final (exclusivo).
-    fn match_at<'a>(&'a self, u: &[Unit], i: usize, token_start: bool) -> Option<(usize, &'a Rule)> {
+    fn match_at<'a>(
+        &'a self,
+        u: &[Unit],
+        i: usize,
+        token_start: bool,
+    ) -> Option<(usize, &'a Rule)> {
         // Preferimos la coincidencia más larga (p. ej. "putamadre" sobre "puta").
         let mut best: Option<(usize, &Rule)> = None;
         for rule in self.rules.iter().filter(|r| token_start || r.suffix) {
-            let Some(end) = match_rule(u, i, rule) else { continue };
+            let Some(end) = match_rule(u, i, rule) else {
+                continue;
+            };
             if best.is_none_or(|(e, _)| end > e) {
                 best = Some((end, rule));
             }
@@ -352,7 +375,10 @@ fn token_begin(u: &[Unit], mut i: usize) -> usize {
 fn alternate_readings(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     // Override bidireccional: lo que sigue se muestra de derecha a izquierda.
-    if text.chars().any(|c| matches!(c, '\u{202E}' | '\u{202B}' | '\u{2067}')) {
+    if text
+        .chars()
+        .any(|c| matches!(c, '\u{202E}' | '\u{202B}' | '\u{2067}'))
+    {
         out.push(text.chars().rev().collect());
     }
     // Texto "de cabeza" (ɐ, ǝ, ʇ…): se lee al revés y con cada letra girada.
@@ -579,7 +605,13 @@ fn normalize(text: &str) -> Vec<Unit> {
         }
         for &ch in &buf {
             if ch.is_alphabetic() || ch == WILDCARD {
-                units.push(Unit { ch, count: 1, start, end, token });
+                units.push(Unit {
+                    ch,
+                    count: 1,
+                    start,
+                    end,
+                    token,
+                });
             } else if units.last().is_some_and(|u| u.token == token) {
                 token += 1; // separador: cierra el fragmento actual
             }
@@ -607,7 +639,10 @@ fn phonetic(u: &mut Vec<Unit>) {
                 x.end = u[i + 1].end;
                 i += 1;
             }
-            'h' if out.last().is_none_or(|p: &Unit| p.token != x.token || p.ch != 's') => {
+            'h' if out
+                .last()
+                .is_none_or(|p: &Unit| p.token != x.token || p.ch != 's') =>
+            {
                 // h muda (salvo "sh", que sí suena: "shit" no debe volverse "sit").
                 i += 1;
                 continue;
@@ -616,7 +651,10 @@ fn phonetic(u: &mut Vec<Unit>) {
             'c' | 'q' | 'k' => {
                 x.ch = 'k';
                 // "que", "qui" → "ke", "ki"
-                if u[i].ch == 'q' && n == Some('u') && matches!(u.get(i + 2).map(|z| z.ch), Some('e' | 'i')) {
+                if u[i].ch == 'q'
+                    && n == Some('u')
+                    && matches!(u.get(i + 2).map(|z| z.ch), Some('e' | 'i'))
+                {
                     x.end = u[i + 1].end;
                     i += 1;
                 }
@@ -662,13 +700,42 @@ mod tests {
     fn detecta_ofuscaciones_comunes() {
         let f = p();
         for t in [
-            "pito", "pi to", "p1to", "P!T0", "p-i-t-o", "p.i.t.o", "p_i_t_o", "piiiiito", "PITOOO",
-            "4buso", "a.buso", "a buso", "@bus0", "ABUSOS",
-            "𝓹𝓲𝓽𝓸", "ｐｉｔｏ", "ⓟⓘⓣⓞ", "рito", "pі to",
-            "pu\u{200B}to", "p*ta", "pútö",
-            "v3rg4", "berga", "vergazo", "kabron", "kabrones", "cabrón", "perrra",
-            "hijueputaaa", "pendejada", "PENDEJOS", "mi erda",
-            "chingada", "xingada", "shit",
+            "pito",
+            "pi to",
+            "p1to",
+            "P!T0",
+            "p-i-t-o",
+            "p.i.t.o",
+            "p_i_t_o",
+            "piiiiito",
+            "PITOOO",
+            "4buso",
+            "a.buso",
+            "a buso",
+            "@bus0",
+            "ABUSOS",
+            "𝓹𝓲𝓽𝓸",
+            "ｐｉｔｏ",
+            "ⓟⓘⓣⓞ",
+            "рito",
+            "pі to",
+            "pu\u{200B}to",
+            "p*ta",
+            "pútö",
+            "v3rg4",
+            "berga",
+            "vergazo",
+            "kabron",
+            "kabrones",
+            "cabrón",
+            "perrra",
+            "hijueputaaa",
+            "pendejada",
+            "PENDEJOS",
+            "mi erda",
+            "chingada",
+            "xingada",
+            "shit",
         ] {
             assert!(f.contains(t), "debió detectar: {t:?}");
         }
@@ -678,11 +745,34 @@ mod tests {
     fn no_marca_palabras_normales() {
         let f = p();
         for t in [
-            "computo", "disputa", "repito", "papi tomo", "capitolio", "pitón", "espíritu",
-            "abusado de bueno", "la vergüenza", "culminar", "perrito lindo", "abuela",
-            "hola amigos, buenas noches", "qué buena música", "**** wow ****", "a la una",
-            "verdad", "pitufo", "mariachi", "socorro", "zorrillo",
-            "una pera", "Sora", "nacional", "rapero", "sitio", "night", "@ana hola!",
+            "computo",
+            "disputa",
+            "repito",
+            "papi tomo",
+            "capitolio",
+            "pitón",
+            "espíritu",
+            "abusado de bueno",
+            "la vergüenza",
+            "culminar",
+            "perrito lindo",
+            "abuela",
+            "hola amigos, buenas noches",
+            "qué buena música",
+            "**** wow ****",
+            "a la una",
+            "verdad",
+            "pitufo",
+            "mariachi",
+            "socorro",
+            "zorrillo",
+            "una pera",
+            "Sora",
+            "nacional",
+            "rapero",
+            "sitio",
+            "night",
+            "@ana hola!",
         ] {
             assert!(!f.contains(t), "falso positivo: {t:?} -> {:?}", f.find(t));
         }
@@ -699,14 +789,14 @@ mod tests {
     fn detecta_trucos_unicode_avanzados() {
         let f = p();
         for t in [
-            "ᴘɪᴛᴏ",                 // versalitas
-            "🇵🇮🇹🇴",               // letras de bandera
-            "🅿🅸🆃🅾",              // recuadro negro
-            "🅟🅘🅣🅞",              // círculo negro
-            "\u{202E}otip",         // override RTL: se ve "pito"
-            "oʇᴉd",                 // de cabeza
-            "pu\u{3164}to",         // relleno Hangul invisible
-            "pu\u{E0020}to",        // carácter de etiqueta
+            "ᴘɪᴛᴏ",          // versalitas
+            "🇵🇮🇹🇴",          // letras de bandera
+            "🅿🅸🆃🅾",          // recuadro negro
+            "🅟🅘🅣🅞",          // círculo negro
+            "\u{202E}otip",  // override RTL: se ve "pito"
+            "oʇᴉd",          // de cabeza
+            "pu\u{3164}to",  // relleno Hangul invisible
+            "pu\u{E0020}to", // carácter de etiqueta
         ] {
             assert!(f.contains(t), "debió detectar: {t:?}");
         }
@@ -715,19 +805,43 @@ mod tests {
     #[test]
     fn frases_abreviaturas_y_categorias() {
         let f = p();
-        for t in ["hijo de puta", "la concha de tu madre", "te voy a matar", "ptm", "alv", "CTM wey"] {
+        for t in [
+            "hijo de puta",
+            "la concha de tu madre",
+            "te voy a matar",
+            "ptm",
+            "alv",
+            "CTM wey",
+        ] {
             assert!(f.contains(t), "debió detectar: {t:?}");
         }
-        for t in ["Álvaro", "hijo de Pedro", "voy a matar el tiempo", "carbón", "cosmos"] {
+        for t in [
+            "Álvaro",
+            "hijo de Pedro",
+            "voy a matar el tiempo",
+            "carbón",
+            "cosmos",
+        ] {
             assert!(!f.contains(t), "falso positivo: {t:?} -> {:?}", f.find(t));
         }
-        assert_eq!(f.find("pito").first().map(|h| h.category.as_str()), Some("vulgar"));
+        assert_eq!(
+            f.find("pito").first().map(|h| h.category.as_str()),
+            Some("vulgar")
+        );
         let sin_vulgar = Profanity::with_options(DEFAULT_BAD_WORDS, "", &["vulgar".into()]);
         assert!(!sin_vulgar.contains("pito"));
         assert!(sin_vulgar.contains("puto"));
         assert_eq!(
             categories(DEFAULT_BAD_WORDS),
-            ["insultos", "vulgar", "sexual", "odio", "violencia", "abreviaturas", "ingles"]
+            [
+                "insultos",
+                "vulgar",
+                "sexual",
+                "odio",
+                "violencia",
+                "abreviaturas",
+                "ingles"
+            ]
         );
     }
 

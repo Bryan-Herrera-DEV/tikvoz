@@ -186,7 +186,11 @@ fn build_ws_url(initial: &FetchResult, room_id: i64) -> String {
     // El cliente oficial manda version_code dos veces; lo replicamos.
     params.push("version_code=270000".into());
 
-    let sep = if initial.push_server.contains('?') { '&' } else { '?' };
+    let sep = if initial.push_server.contains('?') {
+        '&'
+    } else {
+        '?'
+    };
     format!("{}{sep}{}", initial.push_server, params.join("&"))
 }
 
@@ -234,8 +238,16 @@ fn dispatch(
             "WebcastChatMessage" => {
                 if let Ok(c) = ChatMessage::decode(m.payload.as_slice()) {
                     let user = viewer(c.user);
-                    log::trace!("chat seguidor={:?} moderador={}", user.follower, user.moderator);
-                    emit(LiveEvent::Comment { user, text: c.content, history });
+                    log::trace!(
+                        "chat seguidor={:?} moderador={}",
+                        user.follower,
+                        user.moderator
+                    );
+                    emit(LiveEvent::Comment {
+                        user,
+                        text: c.content,
+                        history,
+                    });
                 }
             }
             "WebcastGiftMessage" => {
@@ -258,8 +270,14 @@ fn dispatch(
             "WebcastSocialMessage" => {
                 if let Ok(s) = SocialMessage::decode(m.payload.as_slice()) {
                     match s.action {
-                        1 => emit(LiveEvent::Follow { user: viewer(s.user), history }),
-                        3 => emit(LiveEvent::Share { user: viewer(s.user), history }),
+                        1 => emit(LiveEvent::Follow {
+                            user: viewer(s.user),
+                            history,
+                        }),
+                        3 => emit(LiveEvent::Share {
+                            user: viewer(s.user),
+                            history,
+                        }),
                         _ => {}
                     }
                 }
@@ -267,7 +285,9 @@ fn dispatch(
             "WebcastMemberMessage" if !history => {
                 if let Ok(m) = MemberMessage::decode(m.payload.as_slice()) {
                     if m.action == 1 {
-                        emit(LiveEvent::Join { user: viewer(m.user) });
+                        emit(LiveEvent::Join {
+                            user: viewer(m.user),
+                        });
                     }
                 }
             }
@@ -305,7 +325,10 @@ fn map_ws_error(e: tungstenite::Error) -> LiveError {
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or("sin motivo")
                 .to_string();
-            LiveError::Other(format!("TikTok rechazó el WebSocket ({}): {reason}", resp.status()))
+            LiveError::Other(format!(
+                "TikTok rechazó el WebSocket ({}): {reason}",
+                resp.status()
+            ))
         }
         other => LiveError::Other(format!("WebSocket: {other}")),
     }
@@ -320,7 +343,11 @@ struct Dedup {
 
 impl Dedup {
     fn new(cap: usize) -> Self {
-        Self { seen: HashSet::with_capacity(cap), order: VecDeque::with_capacity(cap), cap }
+        Self {
+            seen: HashSet::with_capacity(cap),
+            order: VecDeque::with_capacity(cap),
+            cap,
+        }
     }
     fn insert(&mut self, id: i64) -> bool {
         if !self.seen.insert(id) {
@@ -354,7 +381,10 @@ mod tests {
 
     #[test]
     fn lee_ping_interval() {
-        assert_eq!(parse_ping_interval("ping-interval=10; x=1"), Some(Duration::from_secs(10)));
+        assert_eq!(
+            parse_ping_interval("ping-interval=10; x=1"),
+            Some(Duration::from_secs(10))
+        );
         assert_eq!(parse_ping_interval("otra=1"), None);
     }
 
@@ -375,7 +405,11 @@ mod tests {
             payload: GiftMessage {
                 repeat_count: 5,
                 repeat_end: end,
-                gift: Some(proto::Gift { r#type: 1, name: "Rosa".into(), ..Default::default() }),
+                gift: Some(proto::Gift {
+                    r#type: 1,
+                    name: "Rosa".into(),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }
             .encode_to_vec(),

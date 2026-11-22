@@ -32,13 +32,17 @@ pub async fn run(
     headers.insert("Origin", HeaderValue::from_static(ORIGIN));
     headers.insert("User-Agent", HeaderValue::from_static(USER_AGENT));
 
-    let (ws, _) = tokio_tungstenite::connect_async(request).await.map_err(ws_err)?;
+    let (ws, _) = tokio_tungstenite::connect_async(request)
+        .await
+        .map_err(ws_err)?;
     let (mut sink, mut stream) = ws.split();
 
     let send = |v: serde_json::Value| tungstenite::Message::Text(v.to_string().into());
-    sink.send(send(json!({ "id": CONNECT_ID, "connect": { "token": token, "name": "js" } })))
-        .await
-        .map_err(ws_err)?;
+    sink.send(send(
+        json!({ "id": CONNECT_ID, "connect": { "token": token, "name": "js" } }),
+    ))
+    .await
+    .map_err(ws_err)?;
 
     let channels = [
         format!("chatrooms.{}.v2", info.chatroom_id),
@@ -153,7 +157,11 @@ struct Dedup {
 
 impl Dedup {
     fn new(cap: usize) -> Self {
-        Self { seen: HashSet::new(), order: VecDeque::new(), cap }
+        Self {
+            seen: HashSet::new(),
+            order: VecDeque::new(),
+            cap,
+        }
     }
     fn insert(&mut self, id: &str) -> bool {
         if !self.seen.insert(id.to_string()) {

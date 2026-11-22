@@ -182,7 +182,10 @@ pub fn apply_dictionary(text: &str, dictionary: &str) -> String {
     }
     map_words(text, |w| {
         let lw = w.to_lowercase();
-        rules.iter().find(|(k, _)| *k == lw).map(|(_, v)| v.to_string())
+        rules
+            .iter()
+            .find(|(k, _)| *k == lw)
+            .map(|(_, v)| v.to_string())
     })
 }
 
@@ -293,7 +296,10 @@ pub struct RepeatGuard {
 
 impl RepeatGuard {
     pub fn new(window: Duration) -> Self {
-        Self { window, seen: VecDeque::new() }
+        Self {
+            window,
+            seen: VecDeque::new(),
+        }
     }
 
     pub fn set_window(&mut self, window: Duration) {
@@ -320,7 +326,9 @@ impl RepeatGuard {
 
 /// Sustituye `{usuario}` y `{mensaje}` en la plantilla de lectura.
 pub fn render_template(template: &str, user: &str, message: &str) -> String {
-    let out = template.replace("{usuario}", user).replace("{mensaje}", message);
+    let out = template
+        .replace("{usuario}", user)
+        .replace("{mensaje}", message);
     collapse_whitespace(&out)
 }
 
@@ -386,7 +394,10 @@ mod tests {
 
     #[test]
     fn trunca_en_limite_de_palabra() {
-        let c = FilterConfig { max_chars: 12, ..cfg() };
+        let c = FilterConfig {
+            max_chars: 12,
+            ..cfg()
+        };
         assert_eq!(
             clean_comment("uno dos tres cuatro cinco", &[], &c).as_deref(),
             Some("uno dos tres")
@@ -413,15 +424,24 @@ mod tests {
     fn diccionario_reemplaza_palabras_completas() {
         let d = "xd = equis de
 q = que";
-        assert_eq!(apply_dictionary("XD q risa, qué", d), "equis de que risa, qué");
+        assert_eq!(
+            apply_dictionary("XD q risa, qué", d),
+            "equis de que risa, qué"
+        );
         assert_eq!(apply_dictionary("xdxd", d), "xdxd");
     }
 
     #[test]
     fn prefijo_obligatorio() {
-        let c = FilterConfig { required_prefix: "!v".into(), ..cfg() };
+        let c = FilterConfig {
+            required_prefix: "!v".into(),
+            ..cfg()
+        };
         assert_eq!(clean_comment("hola", &[], &c), None);
-        assert_eq!(clean_comment("!V hola a todos", &[], &c).as_deref(), Some("hola a todos"));
+        assert_eq!(
+            clean_comment("!V hola a todos", &[], &c).as_deref(),
+            Some("hola a todos")
+        );
     }
 
     #[test]
@@ -430,6 +450,9 @@ q = que";
             render_template("{usuario} dice {mensaje}", "Ana", "hola"),
             "Ana dice hola"
         );
-        assert_eq!(render_template("{usuario} dice {mensaje}", "", "hola"), "dice hola");
+        assert_eq!(
+            render_template("{usuario} dice {mensaje}", "", "hola"),
+            "dice hola"
+        );
     }
 }

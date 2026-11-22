@@ -1,0 +1,3 @@
+# Estilo de código: el de rustfmt por defecto, fijado a la edición del crate.
+# Comprobado en CI con `cargo fmt --check`.
+edition = "2021"

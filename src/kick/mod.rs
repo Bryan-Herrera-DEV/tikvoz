@@ -107,7 +107,10 @@ impl Api {
             return Err(KickError::ChannelNotFound);
         }
         if !resp.status().is_success() {
-            return Err(KickError::Protocol(format!("Kick respondió {} al buscar el canal", resp.status())));
+            return Err(KickError::Protocol(format!(
+                "Kick respondió {} al buscar el canal",
+                resp.status()
+            )));
         }
         let c: ChannelResponse = resp
             .json()
@@ -136,7 +139,9 @@ impl Api {
         let status = resp.status();
         let v: Value = resp.json().await.unwrap_or(Value::Null);
         if !status.is_success() {
-            return Err(KickError::Protocol(format!("Kick respondió {status} en {url}")));
+            return Err(KickError::Protocol(format!(
+                "Kick respondió {status} en {url}"
+            )));
         }
         Ok(v)
     }
@@ -186,13 +191,15 @@ pub struct KickClient {
 impl KickClient {
     pub fn spawn(emit: Emit) -> std::io::Result<Self> {
         let (tx, rx) = unbounded_channel();
-        std::thread::Builder::new().name("kick".into()).spawn(move || {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("runtime tokio");
-            rt.block_on(supervisor(rx, emit));
-        })?;
+        std::thread::Builder::new()
+            .name("kick".into())
+            .spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("runtime tokio");
+                rt.block_on(supervisor(rx, emit));
+            })?;
         Ok(Self { tx })
     }
 
@@ -233,7 +240,9 @@ async fn keep_connected(slug: String, emit: Emit) {
     };
     let mut backoff = Backoff::default();
     loop {
-        status(Status::Connecting(format!("Conectando con kick.com/{slug}…")));
+        status(Status::Connecting(format!(
+            "Conectando con kick.com/{slug}…"
+        )));
         let result = async {
             let info = api.channel(&slug).await?;
             let url = api.ws_url().await;
@@ -243,16 +252,23 @@ async fn keep_connected(slug: String, emit: Emit) {
         .await;
         let wait = match result {
             Ok(()) => {
-                status(Status::Waiting("Kick cerró la conexión, reconectando…".into()));
+                status(Status::Waiting(
+                    "Kick cerró la conexión, reconectando…".into(),
+                ));
                 Duration::from_secs(1)
             }
             Err(KickError::ChannelNotFound) => {
-                return status(Status::Error(format!("kick.com/{slug}: el canal no existe")));
+                return status(Status::Error(format!(
+                    "kick.com/{slug}: el canal no existe"
+                )));
             }
             Err(e) => {
                 let wait = backoff.next_wait();
                 log::warn!("Kick: {e}");
-                status(Status::Waiting(format!("{e} — reintento en {} s", wait.as_secs())));
+                status(Status::Waiting(format!(
+                    "{e} — reintento en {} s",
+                    wait.as_secs()
+                )));
                 wait
             }
         };

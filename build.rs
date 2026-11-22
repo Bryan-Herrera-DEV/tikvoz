@@ -7,7 +7,10 @@ fn main() {
     {
         let mut res = winresource::WindowsResource::new();
         res.set("ProductName", "TikVoz")
-            .set("FileDescription", "TikVoz - lector de chat de TikTok y Kick")
+            .set(
+                "FileDescription",
+                "TikVoz - lector de chat de TikTok y Kick",
+            )
             .set("CompanyName", "TikVoz")
             .set("LegalCopyright", "MIT")
             .set("OriginalFilename", "tikvoz.exe")
@@ -23,7 +26,13 @@ fn main() {
 /// La versión del manifest sale de Cargo.toml (formato a.b.c.0 que exige Windows).
 #[cfg(windows)]
 fn manifest() -> String {
-    let version = format!("{}.0", env!("CARGO_PKG_VERSION").split('-').next().unwrap_or("0.0.0"));
+    let version = format!(
+        "{}.0",
+        env!("CARGO_PKG_VERSION")
+            .split('-')
+            .next()
+            .unwrap_or("0.0.0")
+    );
     MANIFEST.replace("{VERSION}", &version)
 }
 

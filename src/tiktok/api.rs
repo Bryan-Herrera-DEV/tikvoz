@@ -103,10 +103,9 @@ async fn fetch_room_id_api(http: &Client, unique_id: &str) -> Result<i64, LiveEr
     if body.message == "user_not_found" {
         return Err(LiveError::UserNotFound);
     }
-    let user = body
-        .data
-        .and_then(|d| d.user)
-        .ok_or_else(|| LiveError::Other("TikTok no devolvió datos del usuario (¿bloqueo temporal?)".into()))?;
+    let user = body.data.and_then(|d| d.user).ok_or_else(|| {
+        LiveError::Other("TikTok no devolvió datos del usuario (¿bloqueo temporal?)".into())
+    })?;
 
     match user.room_id.parse::<i64>() {
         Ok(id) if id > 0 && user.status != 4 => Ok(id),
@@ -156,10 +155,14 @@ pub async fn fetch_signed_ws(
         )));
     }
     if bytes.is_empty() {
-        return Err(LiveError::Other("servidor de firmas devolvió respuesta vacía".into()));
+        return Err(LiveError::Other(
+            "servidor de firmas devolvió respuesta vacía".into(),
+        ));
     }
     if cookies.is_empty() {
-        return Err(LiveError::Other("servidor de firmas no devolvió cookies".into()));
+        return Err(LiveError::Other(
+            "servidor de firmas no devolvió cookies".into(),
+        ));
     }
 
     let initial = FetchResult::decode(bytes.as_ref())
@@ -184,7 +187,9 @@ fn server_message(bytes: &[u8]) -> String {
 
 /// Convierte un `Set-Cookie` (posiblemente con varias cookies) en un header `Cookie`.
 pub fn parse_set_cookie(raw: &str) -> String {
-    const ATTRS: [&str; 7] = ["path", "domain", "expires", "max-age", "secure", "httponly", "samesite"];
+    const ATTRS: [&str; 7] = [
+        "path", "domain", "expires", "max-age", "secure", "httponly", "samesite",
+    ];
     raw.split([';', ','])
         .filter_map(|part| {
             let (k, v) = part.trim().split_once('=')?;

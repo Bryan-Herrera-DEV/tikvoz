@@ -11,7 +11,14 @@ use crate::live::{Emit, LiveEvent, Platform, Status, Viewer};
 /// (nick, handle, plataforma, seguidor, moderador, suscriptor)
 const USERS: &[(&str, &str, Platform, bool, bool, bool)] = &[
     ("Luna ✨", "luna.dev", Platform::TikTok, true, false, false),
-    ("Carlos", "carlitos_99", Platform::TikTok, false, false, false),
+    (
+        "Carlos",
+        "carlitos_99",
+        Platform::TikTok,
+        false,
+        false,
+        false,
+    ),
     ("Mod Ana", "ana_mod", Platform::TikTok, true, true, false),
     ("𝓢𝓸𝓯í𝓪", "sofi.art", Platform::TikTok, true, false, false),
     ("PedroGG", "pedrogg", Platform::Kick, false, false, true),
@@ -67,7 +74,10 @@ fn viewer(i: usize) -> Viewer {
 }
 
 fn run(emit: Emit, stop: Arc<AtomicBool>) {
-    emit(LiveEvent::Status(Platform::Demo, Status::Live("Modo demo (live simulado)".into())));
+    emit(LiveEvent::Status(
+        Platform::Demo,
+        Status::Live("Modo demo (live simulado)".into()),
+    ));
     // Generador pseudoaleatorio mínimo (xorshift): no vale la pena una dependencia.
     let mut seed: u64 = 0x9E37_79B9_7F4A_7C15;
     let mut rnd = move |n: usize| {
@@ -82,21 +92,57 @@ fn run(emit: Emit, stop: Arc<AtomicBool>) {
         let ev = match tick % 11 {
             3 => {
                 let (gift, diamonds) = GIFTS[rnd(GIFTS.len())];
-                let user = Viewer { platform: Platform::TikTok, ..user };
-                LiveEvent::Gift { user, gift: gift.into(), count: 1 + rnd(5) as u32, diamonds, history: false }
-            }
-            5 => LiveEvent::Follow { user: Viewer { platform: Platform::TikTok, ..user }, history: false },
-            7 => LiveEvent::Join { user },
-            8 => LiveEvent::Share { user: Viewer { platform: Platform::TikTok, ..user }, history: false },
-            10 => {
-                let user = Viewer { platform: Platform::Kick, ..user };
-                if rnd(2) == 0 {
-                    LiveEvent::Subscription { user, months: 1 + rnd(12) as u32, gifted: 0 }
-                } else {
-                    LiveEvent::Subscription { user, months: 0, gifted: 1 + rnd(5) as u32 }
+                let user = Viewer {
+                    platform: Platform::TikTok,
+                    ..user
+                };
+                LiveEvent::Gift {
+                    user,
+                    gift: gift.into(),
+                    count: 1 + rnd(5) as u32,
+                    diamonds,
+                    history: false,
                 }
             }
-            _ => LiveEvent::Comment { user, text: COMMENTS[rnd(COMMENTS.len())].into(), history: false },
+            5 => LiveEvent::Follow {
+                user: Viewer {
+                    platform: Platform::TikTok,
+                    ..user
+                },
+                history: false,
+            },
+            7 => LiveEvent::Join { user },
+            8 => LiveEvent::Share {
+                user: Viewer {
+                    platform: Platform::TikTok,
+                    ..user
+                },
+                history: false,
+            },
+            10 => {
+                let user = Viewer {
+                    platform: Platform::Kick,
+                    ..user
+                };
+                if rnd(2) == 0 {
+                    LiveEvent::Subscription {
+                        user,
+                        months: 1 + rnd(12) as u32,
+                        gifted: 0,
+                    }
+                } else {
+                    LiveEvent::Subscription {
+                        user,
+                        months: 0,
+                        gifted: 1 + rnd(5) as u32,
+                    }
+                }
+            }
+            _ => LiveEvent::Comment {
+                user,
+                text: COMMENTS[rnd(COMMENTS.len())].into(),
+                history: false,
+            },
         };
         emit(ev);
         tick += 1;

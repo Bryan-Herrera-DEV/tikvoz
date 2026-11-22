@@ -217,7 +217,8 @@ impl App {
             self.profanity = build_profanity(s);
         }
         if force || s.repeat_window_secs != a.repeat_window_secs {
-            self.repeats.set_window(Duration::from_secs(s.repeat_window_secs));
+            self.repeats
+                .set_window(Duration::from_secs(s.repeat_window_secs));
         }
         if let Some(sp) = &self.speaker {
             if force || s.voice_id != a.voice_id {
@@ -241,7 +242,12 @@ impl App {
     fn connect(&mut self, platform: Platform) {
         match platform {
             Platform::TikTok => {
-                let user = self.settings.username.trim().trim_start_matches('@').to_string();
+                let user = self
+                    .settings
+                    .username
+                    .trim()
+                    .trim_start_matches('@')
+                    .to_string();
                 if !user.is_empty() {
                     self.settings.username = user.clone();
                     self.tiktok.connect(&user, self.settings.api_key());
@@ -283,8 +289,18 @@ impl App {
         while let Ok(ev) = self.events.try_recv() {
             match ev {
                 LiveEvent::Status(p, s) => self.status[p.index()] = s,
-                LiveEvent::Comment { user, text, history } => self.on_comment(user, text, history),
-                LiveEvent::Gift { user, gift, count, diamonds, history } => {
+                LiveEvent::Comment {
+                    user,
+                    text,
+                    history,
+                } => self.on_comment(user, text, history),
+                LiveEvent::Gift {
+                    user,
+                    gift,
+                    count,
+                    diamonds,
+                    history,
+                } => {
                     let s = &self.settings;
                     let speech = self.render(&s.gift_template, &user, "", &gift, count);
                     let outcome = if history {
@@ -297,27 +313,60 @@ impl App {
                         Outcome::Spoken
                     };
                     let priority = s.priority_gifts;
-                    self.push(Kind::Gift, user, format!("{gift} x{count}"), speech, outcome, priority);
+                    self.push(
+                        Kind::Gift,
+                        user,
+                        format!("{gift} x{count}"),
+                        speech,
+                        outcome,
+                        priority,
+                    );
                 }
                 LiveEvent::Follow { user, history } => {
                     let s = &self.settings;
                     let speech = self.render(&s.follow_template, &user, "", "", 0);
                     let outcome = simple_outcome(history, s.read_follows);
                     let priority = s.priority_gifts;
-                    self.push(Kind::Follow, user, "te sigue".into(), speech, outcome, priority);
+                    self.push(
+                        Kind::Follow,
+                        user,
+                        "te sigue".into(),
+                        speech,
+                        outcome,
+                        priority,
+                    );
                 }
                 LiveEvent::Share { user, history } => {
                     let s = &self.settings;
                     let speech = self.render(&s.share_template, &user, "", "", 0);
                     let outcome = simple_outcome(history, s.read_shares);
-                    self.push(Kind::Share, user, "compartió".into(), speech, outcome, false);
+                    self.push(
+                        Kind::Share,
+                        user,
+                        "compartió".into(),
+                        speech,
+                        outcome,
+                        false,
+                    );
                 }
-                LiveEvent::Subscription { user, months, gifted } => {
+                LiveEvent::Subscription {
+                    user,
+                    months,
+                    gifted,
+                } => {
                     let s = &self.settings;
                     let (template, text, count) = if gifted > 0 {
-                        (&s.gifted_sub_template, format!("regaló {gifted} subs"), gifted)
+                        (
+                            &s.gifted_sub_template,
+                            format!("regaló {gifted} subs"),
+                            gifted,
+                        )
                     } else {
-                        (&s.sub_template, format!("se suscribió ({months} meses)"), months)
+                        (
+                            &s.sub_template,
+                            format!("se suscribió ({months} meses)"),
+                            months,
+                        )
                     };
                     let speech = self.render(template, &user, "", "", count);
                     let outcome = simple_outcome(false, s.read_subs);
@@ -353,7 +402,9 @@ impl App {
             .split(',')
             .map(|u| u.trim().trim_start_matches('@'))
             .any(|u| {
-                !u.is_empty() && (u.eq_ignore_ascii_case(&user.handle) || u.eq_ignore_ascii_case(&user.nickname))
+                !u.is_empty()
+                    && (u.eq_ignore_ascii_case(&user.handle)
+                        || u.eq_ignore_ascii_case(&user.nickname))
             })
     }
 
@@ -365,7 +416,8 @@ impl App {
         }
         let window = Duration::from_secs(secs);
         if self.last_spoken.len() > 512 {
-            self.last_spoken.retain(|_, t| now.duration_since(*t) < window);
+            self.last_spoken
+                .retain(|_, t| now.duration_since(*t) < window);
         }
         match self.last_spoken.get(key) {
             Some(t) if now.duration_since(*t) < window => false,
@@ -397,15 +449,33 @@ impl App {
         let privileged = self.is_vip(&user) || (self.settings.mods_priority && user.moderator);
 
         // 1) Groserías: aplica a todas las plataformas, VIP y mods incluidos.
-        let hits = if history { Vec::new() } else { self.profanity.find(&text) };
+        let hits = if history {
+            Vec::new()
+        } else {
+            self.profanity.find(&text)
+        };
         let has_bad = !hits.is_empty();
-        let shown = if has_bad { self.profanity.censor(&text, CENSOR) } else { text.clone() };
+        let shown = if has_bad {
+            self.profanity.censor(&text, CENSOR)
+        } else {
+            text.clone()
+        };
         let banned_now = has_bad && self.strike(&user);
 
         let s = &self.settings;
-        let source = if has_bad && s.filter.censor_instead_of_skip { &shown } else { &text };
+        let source = if has_bad && s.filter.censor_instead_of_skip {
+            &shown
+        } else {
+            &text
+        };
         let cleaned = filter::clean_comment(source, &[&user.handle, &user.nickname], &s.filter);
-        let speech = self.render(&s.comment_template, &user, cleaned.as_deref().unwrap_or(&shown), "", 0);
+        let speech = self.render(
+            &s.comment_template,
+            &user,
+            cleaned.as_deref().unwrap_or(&shown),
+            "",
+            0,
+        );
         let cooldown_key = format!("{}:{}", user.platform.name(), user.handle);
 
         let outcome = if history {
@@ -439,7 +509,13 @@ impl App {
         }
         let engine = self.engine.as_ref()?;
         let main = self.settings.voice_id.as_ref()?;
-        let lang = engine.voices.iter().find(|v| &v.id == main)?.language.get(..2)?.to_string();
+        let lang = engine
+            .voices
+            .iter()
+            .find(|v| &v.id == main)?
+            .language
+            .get(..2)?
+            .to_string();
         let pool: Vec<&String> = engine
             .voices
             .iter()
@@ -450,9 +526,9 @@ impl App {
             return None;
         }
         // FNV-1a: estable entre ejecuciones (a diferencia del hasher de std).
-        let h = handle
-            .bytes()
-            .fold(0xcbf2_9ce4_8422_2325u64, |h, b| (h ^ b as u64).wrapping_mul(0x0100_0000_01b3));
+        let h = handle.bytes().fold(0xcbf2_9ce4_8422_2325u64, |h, b| {
+            (h ^ b as u64).wrapping_mul(0x0100_0000_01b3)
+        });
         Some(pool[(h % pool.len() as u64) as usize].clone())
     }
 
@@ -467,25 +543,51 @@ impl App {
     }
 
     /// Rellena una plantilla de lectura.
-    fn render(&self, template: &str, user: &Viewer, message: &str, gift: &str, count: u32) -> String {
+    fn render(
+        &self,
+        template: &str,
+        user: &Viewer,
+        message: &str,
+        gift: &str,
+        count: u32,
+    ) -> String {
         let out = template
             .replace("{regalo}", gift)
             .replace("{cantidad}", &count.to_string());
         filter::render_template(&out, &self.spoken_name(user), message)
     }
 
-    fn push(&mut self, kind: Kind, user: Viewer, text: String, speech: String, outcome: Outcome, priority: bool) {
+    fn push(
+        &mut self,
+        kind: Kind,
+        user: Viewer,
+        text: String,
+        speech: String,
+        outcome: Outcome,
+        priority: bool,
+    ) {
         if outcome == Outcome::Spoken {
             if let Some(sp) = &self.speaker {
                 let voice = self.voice_for(&user.handle);
-                sp.enqueue(Utterance { text: speech.clone(), voice, priority });
+                sp.enqueue(Utterance {
+                    text: speech.clone(),
+                    voice,
+                    priority,
+                });
             }
         }
         if self.feed.len() == FEED_CAP {
             self.feed.pop_front();
         }
         let vip = self.is_vip(&user);
-        self.feed.push_back(FeedItem { kind, user, vip, text, speech, outcome });
+        self.feed.push_back(FeedItem {
+            kind,
+            user,
+            vip,
+            text,
+            speech,
+            outcome,
+        });
     }
 
     // ---------------------------------------------------------------- UI
@@ -498,9 +600,12 @@ impl App {
             self.platform_row(ui, Platform::TikTok);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let t = &mut self.settings.theme;
-                ui.selectable_value(t, Theme::Claro, "☀").on_hover_text("Tema claro");
-                ui.selectable_value(t, Theme::Oscuro, "🌙").on_hover_text("Tema oscuro");
-                ui.selectable_value(t, Theme::Sistema, "💻").on_hover_text("Seguir al sistema");
+                ui.selectable_value(t, Theme::Claro, "☀")
+                    .on_hover_text("Tema claro");
+                ui.selectable_value(t, Theme::Oscuro, "🌙")
+                    .on_hover_text("Tema oscuro");
+                ui.selectable_value(t, Theme::Sistema, "💻")
+                    .on_hover_text("Seguir al sistema");
             });
         });
         ui.horizontal(|ui| {
@@ -524,13 +629,21 @@ impl App {
     }
 
     fn platform_row(&mut self, ui: &mut egui::Ui, platform: Platform) {
-        ui.add_sized([58.0, 18.0], egui::Label::new(platform_badge(platform).strong()));
+        ui.add_sized(
+            [58.0, 18.0],
+            egui::Label::new(platform_badge(platform).strong()),
+        );
         let active = self.is_active(platform);
         let (field, hint) = match platform {
             Platform::Kick => (&mut self.settings.kick_channel, "canal de Kick"),
             _ => (&mut self.settings.username, "@usuario de TikTok"),
         };
-        let edit = ui.add_enabled(!active, egui::TextEdit::singleline(field).hint_text(hint).desired_width(170.0));
+        let edit = ui.add_enabled(
+            !active,
+            egui::TextEdit::singleline(field)
+                .hint_text(hint)
+                .desired_width(170.0),
+        );
         let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
         if active {
             if ui.button("⏹ Desconectar").clicked() {
@@ -554,12 +667,20 @@ impl App {
             return;
         };
         ui.horizontal(|ui| {
-            let label = if self.paused { "▶ Reanudar" } else { "⏸ Pausar" };
+            let label = if self.paused {
+                "▶ Reanudar"
+            } else {
+                "⏸ Pausar"
+            };
             if ui.button(label).clicked() {
                 self.paused = !self.paused;
                 sp.set_paused(self.paused);
             }
-            if ui.button("⏭ Saltar").on_hover_text("Corta el mensaje actual").clicked() {
+            if ui
+                .button("⏭ Saltar")
+                .on_hover_text("Corta el mensaje actual")
+                .clicked()
+            {
                 sp.skip();
             }
             if ui.button("🗑 Vaciar cola").clicked() {
@@ -581,7 +702,13 @@ impl App {
             .shared
             .current()
             .map(|t| format!("🔊 {t}"))
-            .unwrap_or_else(|| if self.paused { "⏸ En pausa".into() } else { "🔇 En silencio".into() });
+            .unwrap_or_else(|| {
+                if self.paused {
+                    "⏸ En pausa".into()
+                } else {
+                    "🔇 En silencio".into()
+                }
+            });
         ui.horizontal(|ui| {
             self.monitor_label(ui);
             ui.add(egui::Label::new(RichText::new(now).italics()).truncate());
@@ -620,24 +747,36 @@ impl App {
 
     fn settings_panel(&mut self, ui: &mut egui::Ui) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::CollapsingHeader::new("🔊 Voz").default_open(true).show(ui, |ui| {
-                self.voice_settings(ui);
-            });
-            egui::CollapsingHeader::new("💬 Qué leer").default_open(true).show(ui, |ui| {
-                self.read_settings(ui);
-            });
-            egui::CollapsingHeader::new("⭐ Audiencia y prioridad").default_open(false).show(ui, |ui| {
-                self.audience_settings(ui);
-            });
-            egui::CollapsingHeader::new("⚠ Groserías").default_open(false).show(ui, |ui| {
-                self.profanity_settings(ui);
-            });
-            egui::CollapsingHeader::new("🚫 Filtros").default_open(false).show(ui, |ui| {
-                self.filter_settings(ui);
-            });
-            egui::CollapsingHeader::new("⚙ Avanzado").default_open(false).show(ui, |ui| {
-                self.advanced_settings(ui);
-            });
+            egui::CollapsingHeader::new("🔊 Voz")
+                .default_open(true)
+                .show(ui, |ui| {
+                    self.voice_settings(ui);
+                });
+            egui::CollapsingHeader::new("💬 Qué leer")
+                .default_open(true)
+                .show(ui, |ui| {
+                    self.read_settings(ui);
+                });
+            egui::CollapsingHeader::new("⭐ Audiencia y prioridad")
+                .default_open(false)
+                .show(ui, |ui| {
+                    self.audience_settings(ui);
+                });
+            egui::CollapsingHeader::new("⚠ Groserías")
+                .default_open(false)
+                .show(ui, |ui| {
+                    self.profanity_settings(ui);
+                });
+            egui::CollapsingHeader::new("🚫 Filtros")
+                .default_open(false)
+                .show(ui, |ui| {
+                    self.filter_settings(ui);
+                });
+            egui::CollapsingHeader::new("⚙ Avanzado")
+                .default_open(false)
+                .show(ui, |ui| {
+                    self.advanced_settings(ui);
+                });
         });
     }
 
@@ -667,19 +806,32 @@ impl App {
             });
         ui.horizontal(|ui| {
             ui.add(
-                egui::Slider::new(&mut self.settings.rate, engine.min_rate..=engine.max_rate.min(3.0))
-                    .text("Velocidad"),
+                egui::Slider::new(
+                    &mut self.settings.rate,
+                    engine.min_rate..=engine.max_rate.min(3.0),
+                )
+                .text("Velocidad"),
             );
-            if ui.small_button("↺").on_hover_text("Velocidad normal").clicked() {
+            if ui
+                .small_button("↺")
+                .on_hover_text("Velocidad normal")
+                .clicked()
+            {
                 self.settings.rate = engine.normal_rate;
             }
         });
         ui.add(
-            egui::Slider::new(&mut self.settings.volume, engine.min_volume..=engine.max_volume)
-                .text("Volumen"),
+            egui::Slider::new(
+                &mut self.settings.volume,
+                engine.min_volume..=engine.max_volume,
+            )
+            .text("Volumen"),
         );
         ui.horizontal(|ui| {
-            ui.add(egui::TextEdit::singleline(&mut self.test_text).desired_width(ui.available_width() - 70.0));
+            ui.add(
+                egui::TextEdit::singleline(&mut self.test_text)
+                    .desired_width(ui.available_width() - 70.0),
+            );
             if ui.button("Probar").clicked() {
                 if let Some(sp) = &self.speaker {
                     sp.say_now(self.test_text.clone());
@@ -706,7 +858,10 @@ impl App {
         template_edit(ui, &mut s.follow_template, "{usuario}");
         ui.checkbox(&mut s.read_shares, "Compartidos (TikTok)");
         template_edit(ui, &mut s.share_template, "{usuario}");
-        ui.checkbox(&mut s.read_joins, "Bienvenidas (solo si la cola está vacía)");
+        ui.checkbox(
+            &mut s.read_joins,
+            "Bienvenidas (solo si la cola está vacía)",
+        );
         template_edit(ui, &mut s.join_template, "{usuario}");
         ui.checkbox(&mut s.show_joins, "Mostrar entradas en el feed");
     }
@@ -714,13 +869,28 @@ impl App {
     fn audience_settings(&mut self, ui: &mut egui::Ui) {
         let s = &mut self.settings;
         ui.checkbox(&mut s.voice_per_user, "Voz distinta por usuario")
-            .on_hover_text("Cada @usuario suena siempre con la misma voz (del mismo idioma que la principal).");
-        ui.checkbox(&mut s.priority_gifts, "Regalos, subs y seguidores se adelantan en la cola");
-        ui.checkbox(&mut s.mods_priority, "Moderadores con prioridad y sin límites");
-        ui.checkbox(&mut s.only_followers, "Leer solo a quienes te siguen (TikTok)");
+            .on_hover_text(
+                "Cada @usuario suena siempre con la misma voz (del mismo idioma que la principal).",
+            );
+        ui.checkbox(
+            &mut s.priority_gifts,
+            "Regalos, subs y seguidores se adelantan en la cola",
+        );
+        ui.checkbox(
+            &mut s.mods_priority,
+            "Moderadores con prioridad y sin límites",
+        );
+        ui.checkbox(
+            &mut s.only_followers,
+            "Leer solo a quienes te siguen (TikTok)",
+        );
         ui.horizontal(|ui| {
             ui.label("Enfriamiento por usuario:");
-            ui.add(egui::DragValue::new(&mut s.user_cooldown_secs).range(0..=600).suffix(" s"));
+            ui.add(
+                egui::DragValue::new(&mut s.user_cooldown_secs)
+                    .range(0..=600)
+                    .suffix(" s"),
+            );
         })
         .response
         .on_hover_text("Tiempo mínimo entre dos lecturas del mismo usuario (0 = sin límite).");
@@ -738,8 +908,14 @@ impl App {
              (𝓹𝓲𝓽𝓸), cirílicas o escritura fonética (berga, kabron). Aplica a TikTok y Kick.",
         );
         let s = &mut self.settings;
-        ui.checkbox(&mut s.filter.censor_instead_of_skip, "Leer el mensaje con \"piip\" en vez de omitirlo");
-        ui.checkbox(&mut s.filter.censor_names, "Si el nombre es una grosería, decir \"alguien\"");
+        ui.checkbox(
+            &mut s.filter.censor_instead_of_skip,
+            "Leer el mensaje con \"piip\" en vez de omitirlo",
+        );
+        ui.checkbox(
+            &mut s.filter.censor_names,
+            "Si el nombre es una grosería, decir \"alguien\"",
+        );
         ui.horizontal(|ui| {
             ui.label("Silenciar al usuario tras");
             ui.add(egui::DragValue::new(&mut s.filter.auto_ban_strikes).range(0..=20));
@@ -761,8 +937,12 @@ impl App {
                 }
             });
         }
-        ui.label("Lista ([categoría] agrupa; palabra* empieza, *palabra termina, *palabra* contiene):")
-            .on_hover_text("Una palabra por línea o separadas por coma. Las frases con espacios también valen.");
+        ui.label(
+            "Lista ([categoría] agrupa; palabra* empieza, *palabra termina, *palabra* contiene):",
+        )
+        .on_hover_text(
+            "Una palabra por línea o separadas por coma. Las frases con espacios también valen.",
+        );
         ui.add(
             egui::TextEdit::multiline(&mut s.filter.bad_words)
                 .code_editor()
@@ -791,7 +971,10 @@ impl App {
             if hits.is_empty() {
                 ui.colored_label(Color32::from_rgb(40, 170, 80), "✔ limpio");
             } else {
-                let rules: Vec<String> = hits.iter().map(|h| format!("{} · {}", h.rule, h.category)).collect();
+                let rules: Vec<String> = hits
+                    .iter()
+                    .map(|h| format!("{} · {}", h.rule, h.category))
+                    .collect();
                 ui.colored_label(
                     ui.visuals().error_fg_color,
                     format!(
@@ -809,7 +992,10 @@ impl App {
 
     fn filter_settings(&mut self, ui: &mut egui::Ui) {
         let s = &mut self.settings;
-        ui.checkbox(&mut s.skip_repeats, "No repetir el mismo mensaje del mismo usuario");
+        ui.checkbox(
+            &mut s.skip_repeats,
+            "No repetir el mismo mensaje del mismo usuario",
+        );
         ui.add_enabled(
             s.skip_repeats,
             egui::Slider::new(&mut s.repeat_window_secs, 5..=600).text("seg. de memoria"),
@@ -835,7 +1021,10 @@ impl App {
                 .code_editor()
                 .desired_rows(4),
         );
-        if ui.small_button("Restaurar diccionario por defecto").clicked() {
+        if ui
+            .small_button("Restaurar diccionario por defecto")
+            .clicked()
+        {
             s.filter.dictionary = filter::DEFAULT_DICTIONARY.into();
         }
     }
@@ -844,7 +1033,10 @@ impl App {
         let s = &mut self.settings;
         ui.add(egui::Slider::new(&mut s.max_queue, 1..=100).text("máx. en cola"))
             .on_hover_text("Si se llena, se descartan los más viejos: así nunca vas atrasado.");
-        ui.checkbox(&mut s.auto_connect, "Conectar TikTok y Kick al abrir la app");
+        ui.checkbox(
+            &mut s.auto_connect,
+            "Conectar TikTok y Kick al abrir la app",
+        );
         ui.checkbox(&mut s.show_monitor, "Mostrar consumo (CPU, RAM, GPU)");
         ui.label("API key de Euler Stream para TikTok (opcional):");
         ui.horizontal(|ui| {
@@ -885,10 +1077,18 @@ impl App {
                         if ui.small_button("🔊").on_hover_text("Leer ahora").clicked() {
                             to_speak = Some(item.speech.clone());
                         }
-                        if ui.small_button("🚫").on_hover_text("Silenciar usuario").clicked() {
+                        if ui
+                            .small_button("🚫")
+                            .on_hover_text("Silenciar usuario")
+                            .clicked()
+                        {
                             to_block = Some(item.user.handle.clone());
                         }
-                        if ui.small_button("⭐").on_hover_text("Agregar a VIP").clicked() {
+                        if ui
+                            .small_button("⭐")
+                            .on_hover_text("Agregar a VIP")
+                            .clicked()
+                        {
                             to_vip = Some(item.user.handle.clone());
                         }
                         let dim = item.outcome != Outcome::Spoken;
@@ -900,7 +1100,9 @@ impl App {
                         if item.user.moderator {
                             ui.label("🛡").on_hover_text("Moderador");
                         }
-                        let name = RichText::new(display_name(&item.user.nickname, &item.user.handle)).strong();
+                        let name =
+                            RichText::new(display_name(&item.user.nickname, &item.user.handle))
+                                .strong();
                         let accent = ui.visuals().hyperlink_color;
                         ui.label(if dim { name.weak() } else { name.color(accent) });
                         let text = RichText::new(&item.text);
@@ -920,8 +1122,16 @@ impl App {
                         "{} · @{}{}{} · #{i}",
                         item.user.platform.name(),
                         item.user.handle,
-                        if item.user.follower == Some(true) { " · te sigue" } else { "" },
-                        if item.user.subscriber { " · suscriptor" } else { "" },
+                        if item.user.follower == Some(true) {
+                            " · te sigue"
+                        } else {
+                            ""
+                        },
+                        if item.user.subscriber {
+                            " · suscriptor"
+                        } else {
+                            ""
+                        },
                     ));
                 }
             });
@@ -973,7 +1183,11 @@ impl eframe::App for App {
 }
 
 fn build_profanity(s: &Settings) -> Profanity {
-    Profanity::with_options(&s.filter.bad_words, &s.filter.allowed_words, &s.filter.disabled_categories)
+    Profanity::with_options(
+        &s.filter.bad_words,
+        &s.filter.allowed_words,
+        &s.filter.disabled_categories,
+    )
 }
 
 /// Etiqueta de color de cada plataforma.
@@ -1011,7 +1225,9 @@ fn install_fallback_fonts(ctx: &egui::Context) {
     ];
     let mut fonts = egui::FontDefinitions::default();
     for path in CANDIDATES {
-        let Ok(bytes) = std::fs::read(path) else { continue };
+        let Ok(bytes) = std::fs::read(path) else {
+            continue;
+        };
         let name = path.to_string();
         fonts
             .font_data
