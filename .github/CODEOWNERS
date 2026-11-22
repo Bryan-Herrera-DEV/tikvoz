@@ -1,0 +1,11 @@
+# Responsables de revisar cada parte del código.
+# GitHub los asigna automáticamente como revisores en los pull requests.
+# https://docs.github.com/es/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+*                       @Bryan-Herrera-DEV
+
+# Partes sensibles: cambios en el empaquetado, CI o la lista de groserías
+# afectan a todos los usuarios y siempre requieren revisión del mantenedor.
+/.github/               @Bryan-Herrera-DEV
+/scripts/               @Bryan-Herrera-DEV
+/src/profanity.rs       @Bryan-Herrera-DEV
