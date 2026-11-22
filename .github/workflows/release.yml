@@ -21,7 +21,7 @@ jobs:
     name: Windows x64
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Verificar que el tag coincide con Cargo.toml
         shell: pwsh
@@ -36,10 +36,12 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
 
-      - name: Lint y tests
-        run: |
-          cargo clippy --all-targets --locked -- -D warnings
-          cargo test --locked
+      # Un comando por paso: en PowerShell un `run:` de varias líneas solo
+      # falla si falla el ÚLTIMO comando, y eso ocultaba errores de clippy.
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Tests
+        run: cargo test --locked
 
       - name: Compilar y empaquetar
         shell: pwsh
