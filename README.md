@@ -4,8 +4,9 @@
 
 **Lee en voz alta el chat de tu live de TikTok y Kick, al mismo tiempo. Gratis, local y casi sin retraso.**
 
-Un solo `.exe` de ~6,5 MB · Interfaz nativa (sin Electron ni navegador) · Voces de Windows offline
+Un solo `.exe` de ~7 MB · Interfaz nativa (sin Electron ni navegador) · Voces de Windows offline
 
+![Versión](https://img.shields.io/badge/versión-1.0.0-blue)
 ![Rust](https://img.shields.io/badge/Rust-1.84+-orange?logo=rust)
 ![Plataforma](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows)
 ![Licencia](https://img.shields.io/badge/licencia-MIT-green)
@@ -55,8 +56,31 @@ La mayoría de los lectores de chat para lives son webs, apps Electron de ciento
 
 ## Instalación
 
-1. Descarga `tikvoz.exe` desde la sección [**Releases**](../../releases).
-2. Ejecútalo. No necesita instalador, runtimes ni permisos de administrador.
+Descarga la última versión desde [**Releases**](../../releases/latest). Cada versión trae:
+
+| Archivo | Qué es |
+|---|---|
+| `tikvoz-vX.Y.Z-windows-x64.exe` | El programa listo para usar. Solo descárgalo y ábrelo. |
+| `tikvoz-vX.Y.Z-windows-x64.zip` | El mismo `.exe` con README, licencia y CHANGELOG. |
+| `SHA256SUMS.txt` | Sumas de verificación para comprobar que el archivo no fue alterado. |
+
+No necesita instalador, runtimes ni permisos de administrador. Los cambios de cada versión están en el [CHANGELOG](CHANGELOG.md).
+
+<details>
+<summary>Verificar la descarga (opcional)</summary>
+
+```powershell
+# Compara el resultado con la línea correspondiente de SHA256SUMS.txt
+Get-FileHash .\tikvoz-v1.0.0-windows-x64.exe -Algorithm SHA256
+```
+
+Cada build lo compila GitHub Actions a partir del código de este repositorio y lleva una **atestación de procedencia** firmada. Con la [CLI de GitHub](https://cli.github.com/) puedes comprobar que el `.exe` salió exactamente de este repo:
+
+```bash
+gh attestation verify tikvoz-v1.0.0-windows-x64.exe --repo <dueño>/<repo>
+```
+
+</details>
 
 > [!NOTE]
 > Al ser un ejecutable nuevo y sin firma digital, Windows SmartScreen o Defender pueden avisar la primera vez. El código está aquí completo; si prefieres, [compílalo tú mismo](#compilar-desde-el-código).
@@ -422,7 +446,7 @@ Medido con el binario de release en Windows 11, con un live real y en modo demo:
 
 | Métrica | Valor |
 |---|---|
-| Tamaño del `.exe` | ~6,5 MB |
+| Tamaño del `.exe` | ~7 MB (3,5 MB en el `.zip`) |
 | RAM privada | ~85–105 MB, estable en sesiones largas |
 | CPU en reposo / con un live activo | ~0 % / < 1 % |
 | Latencia de la voz | ~140 ms la primera frase, ~10 ms entre frases |
@@ -440,7 +464,22 @@ git clone <url-de-este-repo>
 cd tikvoz
 cargo build --release      # → target/release/tikvoz.exe
 cargo test                 # pruebas unitarias
+pwsh scripts/package.ps1   # → dist/: .exe, .zip, SHA256SUMS.txt y notas (lo mismo que publica CI)
 ```
+
+### Publicar una versión
+
+1. Sube la versión en `Cargo.toml` y agrega su sección al [CHANGELOG](CHANGELOG.md).
+2. Crea y sube el tag:
+
+   ```bash
+   git tag -a v1.1.0 -m "TikVoz 1.1.0"
+   git push origin v1.1.0
+   ```
+
+3. GitHub Actions comprueba que el tag coincide con `Cargo.toml`, ejecuta clippy y los tests, compila, empaqueta, firma la procedencia y publica la release con sus notas. Los tags con guion (`v1.1.0-beta.1`) salen como *pre-release*.
+
+Además, cada push a `main` deja un build descargable durante 14 días en la pestaña **Actions**.
 
 Estructura:
 
