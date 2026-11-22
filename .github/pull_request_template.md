@@ -28,6 +28,7 @@ Puedes usar `cargo run -- --demo --config ./tmp` para no mostrar datos reales.
 - [ ] `cargo fmt --check` pasa.
 - [ ] `cargo clippy --all-targets --locked -- -D warnings` no muestra advertencias.
 - [ ] `cargo test --locked` pasa, y agregué tests para lo que cambié.
+- [ ] Si toqué una ruta caliente (filtro, limpieza, parseo de TikTok o Kick), ejecuté `cargo bench` y revisé el check **Benchmarks**.
 - [ ] Si toqué el filtro de groserías, agregué casos que **sí** deben detectarse y casos que **no**.
 - [ ] Si agregué un ajuste, tiene valor por defecto y los ajustes viejos siguen cargando.
 - [ ] Actualicé el README y el CHANGELOG (sección `[Sin publicar]`) si correspondía.
