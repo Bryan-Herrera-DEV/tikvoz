@@ -5,6 +5,19 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+### Agregado
+- Benchmarks con Criterion de las rutas que recorre cada mensaje (filtro de groserías, limpieza, Kick, TikTok).
+- Workflow **Benchmarks**: cada pull request se compara contra su rama base en la misma máquina (diseño A-B-A con control de ruido) y falla si empeora el rendimiento o el tamaño del `.exe`.
+- Guía de contribución, código de conducta, política de seguridad, plantillas de issues y de pull request, CODEOWNERS y Dependabot.
+
+### Cambiado
+- El código se separa en biblioteca (`lib.rs`) y ejecutable; CI exige `cargo fmt`.
+- README con un estilo más sobrio.
+
+### Corregido
+- Lint de clippy de Rust 1.100 (`manual_contains`) y un paso de la release que podía ocultar fallos de clippy.
+- `quinn-proto` 0.11.15 en `Cargo.lock` (GHSA-4w2j-m93h-cj5j; no se compilaba en el `.exe`).
+
 ## [1.0.0] - 2026-11-22
 
 Primera versión estable. 🎉
