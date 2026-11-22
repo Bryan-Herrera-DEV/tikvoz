@@ -131,8 +131,26 @@ Las listas de palabras prohibidas típicas se saltan con trucos triviales. TikVo
 | `p*ta` | comodín | ✅ |
 | `berga`, `kabron`, `xingada` | escritura fonética | ✅ |
 | `pútö` | acentos | ✅ |
+| `ᴘɪᴛᴏ`, `🇵🇮🇹🇴`, `🅿🅸🆃🅾` | versalitas, letras de bandera y en recuadro | ✅ |
+| `‮otip` (con `U+202E`), `oʇᴉd` | texto que se **muestra** al revés o de cabeza | ✅ |
+| `puㅤto` (relleno Hangul) | rellenos invisibles | ✅ |
+| `ptm`, `ctm`, `alv`, `mrd` | abreviaturas sin vocales | ✅ |
+| `hijo de puta`, `te voy a matar` | frases | ✅ |
 
-Y **no** se equivoca con palabras normales: `computo`, `disputa`, `repito`, `papi tomo`, `pitón`, `pera`, `nacional`, `rapero`, `la vergüenza`… pasan limpias. Hay decenas de casos de cada tipo cubiertos por tests.
+Y **no** se equivoca con palabras normales: `computo`, `disputa`, `repito`, `papi tomo`, `pitón`, `pera`, `nacional`, `rapero`, `la vergüenza`, `Álvaro`, `carbón`… pasan limpias. Hay decenas de casos de cada tipo cubiertos por tests.
+
+#### En qué se basa
+
+| Técnica | Inspirada en |
+|---|---|
+| Confusables y homoglifos | [Unicode UTS #39](https://unicode.org/reports/tr39/): datos de *confusables* y algoritmo *skeleton* |
+| Ignorar controles bidireccionales | Ataque [Trojan Source](https://en.wikipedia.org/wiki/Trojan_Source) (CVE-2021-42574) |
+| Comodines `palabra*`, `*palabra`, `*palabra*` y frases | [Discord AutoMod](https://support.discord.com/hc/en-us/articles/4421269296535) |
+| Excepciones aplicadas **por coincidencia** (no por mensaje) | Evita el [bypass conocido de Discord](https://support.discord.com/hc/fr/community/posts/16829041106071-AutoMod-allowed-words-can-bypass-regex-filtering-rules-for-the-whole-message), donde una palabra permitida apaga el filtro del mensaje entero |
+| Categorías activables (insultos, sexual, odio, violencia…) | [Twitch AutoMod](https://twitch.tv/creatorcamp/paths/going-live/moderation-and-safety) |
+| Leetspeak, vocales omitidas, fonética, espaciado | Taxonomías académicas de evasión de moderación ([WNUT 2022](https://aclweb.org/anthology/2022.wnut-1.25.pdf), [arXiv 2302.05706](https://arxiv.org/pdf/2302.05706)) |
+
+Lo que **no** se hace a propósito: detectar letras desordenadas (`ptio`). En español marca palabras normales (`carbón` ≈ `cabrón`); es el clásico *problema de Scunthorpe*.
 
 ```mermaid
 flowchart LR
@@ -156,7 +174,9 @@ Qué puedes hacer con una grosería detectada:
 - **Auto-silenciar** al usuario tras *N* groserías (3 por defecto). Pasa a la lista de silenciados y puedes quitarlo cuando quieras.
 - Si el **nombre** del usuario es una grosería, la voz dice "alguien".
 - El feed **nunca muestra la grosería sin censurar**, porque puede estar en pantalla en tu stream.
-- Editar la lista: una palabra por línea o separadas por coma. `palabra*` detecta todo lo que empiece así (`pendej*` cubre pendejo, pendejada…).
+- **Categorías** que se activan y desactivan por separado: insultos, vulgar, sexual, odio, violencia, abreviaturas e inglés.
+- **Excepciones** para palabras que en tu comunidad no son ofensivas.
+- Editar la lista: una palabra por línea o separadas por coma. `[categoría]` agrupa; `palabra*` detecta lo que empieza así (`pendej*` → pendejo, pendejada…), `*palabra` lo que termina así y `*palabra*` lo que la contiene.
 - **Probar el filtro** escribiendo cualquier texto en la caja de prueba de la sección **⚠ Groserías**.
 
 ## Cómo funciona por dentro
@@ -360,7 +380,9 @@ flowchart TD
 
 | Ajuste | Defecto |
 |---|---|
-| Lista (`palabra*` = prefijo) | ~60 groserías comunes en español y algunas en inglés |
+| Lista (`[categoría]`, `palabra*`, `*palabra`, `*palabra*`, frases) | ~90 entradas en 7 categorías (español + inglés) |
+| Categorías activas | todas |
+| Excepciones | — |
 | Leer con "piip" en vez de omitir | ❌ (se omite) |
 | Si el nombre es una grosería, decir "alguien" | ✅ |
 | Silenciar al usuario tras N groserías (0 = nunca) | 3 |
