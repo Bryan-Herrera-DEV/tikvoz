@@ -120,7 +120,7 @@ impl App {
             repeats: RepeatGuard::new(Duration::from_secs(settings.repeat_window_secs)),
             last_spoken: HashMap::new(),
             strikes: HashMap::new(),
-            profanity: Profanity::new(&settings.filter.bad_words),
+            profanity: build_profanity(&settings),
             profanity_test: String::new(),
             emit,
             demo: None,
@@ -209,8 +209,12 @@ impl App {
     /// Aplica solo lo que cambió (o todo si `force`).
     fn push_voice_settings(&mut self, force: bool) {
         let (s, a) = (&self.settings, &self.applied);
-        if force || s.filter.bad_words != a.filter.bad_words {
-            self.profanity = Profanity::new(&s.filter.bad_words);
+        if force
+            || s.filter.bad_words != a.filter.bad_words
+            || s.filter.allowed_words != a.filter.allowed_words
+            || s.filter.disabled_categories != a.filter.disabled_categories
+        {
+            self.profanity = build_profanity(s);
         }
         if force || s.repeat_window_secs != a.repeat_window_secs {
             self.repeats.set_window(Duration::from_secs(s.repeat_window_secs));
@@ -740,7 +744,24 @@ impl App {
             ui.add(egui::DragValue::new(&mut s.filter.auto_ban_strikes).range(0..=20));
             ui.label("groserías (0 = nunca)");
         });
-        ui.label("Lista (coma o línea; palabra* = todo lo que empiece así):");
+        let cats = profanity::categories(&s.filter.bad_words);
+        if !cats.is_empty() {
+            ui.label("Categorías activas:");
+            ui.horizontal_wrapped(|ui| {
+                for cat in cats {
+                    let mut on = !s.filter.disabled_categories.contains(&cat);
+                    if ui.checkbox(&mut on, &cat).changed() {
+                        if on {
+                            s.filter.disabled_categories.retain(|c| c != &cat);
+                        } else {
+                            s.filter.disabled_categories.push(cat);
+                        }
+                    }
+                }
+            });
+        }
+        ui.label("Lista ([categoría] agrupa; palabra* empieza, *palabra termina, *palabra* contiene):")
+            .on_hover_text("Una palabra por línea o separadas por coma. Las frases con espacios también valen.");
         ui.add(
             egui::TextEdit::multiline(&mut s.filter.bad_words)
                 .code_editor()
@@ -750,6 +771,13 @@ impl App {
         if ui.small_button("Restaurar lista por defecto").clicked() {
             s.filter.bad_words = profanity::DEFAULT_BAD_WORDS.into();
         }
+        ui.label("Excepciones (nunca cuentan como grosería):");
+        ui.add(
+            egui::TextEdit::multiline(&mut s.filter.allowed_words)
+                .hint_text("p. ej. marica, si en tu comunidad se usa de cariño")
+                .desired_rows(2)
+                .desired_width(f32::INFINITY),
+        );
         ui.separator();
         ui.label("Probar el filtro:");
         ui.add(
@@ -762,11 +790,11 @@ impl App {
             if hits.is_empty() {
                 ui.colored_label(Color32::from_rgb(40, 170, 80), "✔ limpio");
             } else {
-                let rules: Vec<&str> = hits.iter().map(|h| h.rule.as_str()).collect();
+                let rules: Vec<String> = hits.iter().map(|h| format!("{} · {}", h.rule, h.category)).collect();
                 ui.colored_label(
                     ui.visuals().error_fg_color,
                     format!(
-                        "✖ {}  (regla: {})",
+                        "✖ {}  ({})",
                         self.profanity.censor(&self.profanity_test, CENSOR),
                         rules.join(", ")
                     ),
@@ -941,6 +969,10 @@ impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, &self.settings);
     }
+}
+
+fn build_profanity(s: &Settings) -> Profanity {
+    Profanity::with_options(&s.filter.bad_words, &s.filter.allowed_words, &s.filter.disabled_categories)
 }
 
 /// Etiqueta de color de cada plataforma.

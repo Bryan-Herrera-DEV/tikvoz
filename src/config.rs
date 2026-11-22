@@ -108,6 +108,11 @@ impl Default for Settings {
 impl Settings {
     /// Adapta ajustes guardados por versiones anteriores.
     pub fn migrate(&mut self) {
+        // v0.2 → v0.3: si la lista era la de fábrica, pasa a la nueva (superconjunto
+        // con categorías, frases y abreviaturas). Si el usuario la editó, no se toca.
+        if self.filter.bad_words.trim() == crate::profanity::DEFAULT_BAD_WORDS_V1.trim() {
+            self.filter.bad_words = crate::profanity::DEFAULT_BAD_WORDS.into();
+        }
         // v0.1 tenía "palabras bloqueadas" por substring; pasan al detector avanzado.
         let old = std::mem::take(&mut self.filter.blocked_words);
         for w in old.split(',').map(str::trim).filter(|w| !w.is_empty()) {
@@ -136,6 +141,18 @@ mod tests {
         assert_eq!(s.rate, 1.5);
         assert_eq!(s.max_queue, Settings::default().max_queue);
         assert_eq!(s.filter, FilterConfig::default());
+    }
+
+    #[test]
+    fn migra_lista_de_fabrica_v1_y_respeta_la_editada() {
+        let mut s = Settings::default();
+        s.filter.bad_words = crate::profanity::DEFAULT_BAD_WORDS_V1.into();
+        s.migrate();
+        assert_eq!(s.filter.bad_words, crate::profanity::DEFAULT_BAD_WORDS);
+        let mut e = Settings::default();
+        e.filter.bad_words = "mi lista".into();
+        e.migrate();
+        assert_eq!(e.filter.bad_words, "mi lista");
     }
 
     #[test]

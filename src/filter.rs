@@ -28,6 +28,10 @@ pub struct FilterConfig {
     pub auto_ban_strikes: u32,
     /// Si el nombre del usuario es una grosería, se lee "alguien".
     pub censor_names: bool,
+    /// Excepciones: palabras que nunca cuentan como grosería (coma o línea).
+    pub allowed_words: String,
+    /// Categorías de la lista (`[insultos]`, …) que están apagadas.
+    pub disabled_categories: Vec<String>,
     /// Usuarios (@usuario o nick) separados por coma que nunca se leen.
     pub blocked_users: String,
     /// `true`: las groserías se leen como "piip"; `false`: se omite el comentario.
@@ -64,6 +68,8 @@ impl Default for FilterConfig {
             bad_words: crate::profanity::DEFAULT_BAD_WORDS.into(),
             auto_ban_strikes: 3,
             censor_names: true,
+            allowed_words: String::new(),
+            disabled_categories: Vec::new(),
             blocked_users: String::new(),
             censor_instead_of_skip: false,
             required_prefix: String::new(),
