@@ -43,6 +43,14 @@ windows-sys = { version = "0.59", features = [
     "Win32_System_Performance",
 ] }
 
+[dev-dependencies]
+# Benchmarks (benches/). Sin gráficos para que compile rápido y liviano.
+criterion = { version = "0.5", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "rendimiento"
+harness = false
+
 [target.'cfg(windows)'.build-dependencies]
 winresource = { version = "0.1", default-features = false }
 
