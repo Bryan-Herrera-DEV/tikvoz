@@ -1,5 +1,7 @@
 //! Detector de groserías resistente a ofuscación.
 //!
+//! Rendimiento: ~3,5 µs por comentario (ver `cargo bench -- groserias`).
+//!
 //! La gente evade los filtros simples con trucos como `pi to`, `p1to`, `4buso`,
 //! `a.buso`, `p*ta`, `piiiito`, `𝓹𝓲𝓽𝓸`, letras cirílicas (`рito`), caracteres
 //! invisibles o escritura fonética (`berga`, `kabron`). Este módulo normaliza el
