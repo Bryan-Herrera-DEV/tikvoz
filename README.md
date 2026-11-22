@@ -38,6 +38,7 @@ Un solo `.exe` de ~7 MB · Interfaz nativa (sin Electron ni navegador) · Voces 
 - [Compilar desde el código](#compilar-desde-el-código)
 - [Preguntas frecuentes](#preguntas-frecuentes)
 - [Hoja de ruta](#hoja-de-ruta)
+- [Contribuir](#contribuir)
 
 ## ¿Por qué TikVoz?
 
@@ -532,6 +533,15 @@ No. Son integraciones no oficiales con TikTok LIVE y con el chat de Kick. Si alg
 - [ ] Overlay para OBS con el mensaje que se está leyendo.
 - [ ] Más plataformas: YouTube Live y Twitch.
 - [ ] Builds para Linux y macOS.
+
+## Contribuir
+
+Las contribuciones son bienvenidas: reportes de errores, ideas, palabras para el filtro, nuevas plataformas o mejoras de la documentación.
+
+- [Guía de contribución](CONTRIBUTING.md): entorno, estilo, commits y cómo enviar un pull request.
+- [Código de conducta](CODE_OF_CONDUCT.md).
+- [Política de seguridad](SECURITY.md): las vulnerabilidades se reportan en privado, no en issues.
+- [Abrir un issue](../../issues/new/choose): hay plantillas para errores, funciones, plataformas nuevas y el filtro de groserías.
 
 ## Licencia
 
