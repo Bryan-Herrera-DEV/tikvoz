@@ -31,7 +31,7 @@ fn main() -> eframe::Result {
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("TikVoz")
+            .with_title(format!("TikVoz v{}", env!("CARGO_PKG_VERSION")))
             .with_inner_size([980.0, 640.0])
             .with_min_inner_size([680.0, 420.0]),
         // Sin vsync forzado ni MSAA: la UI es 2D y solo repinta ante eventos.

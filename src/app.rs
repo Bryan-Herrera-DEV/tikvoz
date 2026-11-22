@@ -492,7 +492,8 @@ impl App {
 
     fn top_bar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            ui.heading(RichText::new("TikVoz").strong());
+            ui.heading(RichText::new("TikVoz").strong())
+                .on_hover_text(format!("TikVoz v{}", env!("CARGO_PKG_VERSION")));
             ui.separator();
             self.platform_row(ui, Platform::TikTok);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
