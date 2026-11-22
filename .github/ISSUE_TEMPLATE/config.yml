@@ -1,0 +1,9 @@
+# Selector de plantillas al abrir un issue.
+blank_issues_enabled: false
+contact_links:
+  - name: Reportar una vulnerabilidad de seguridad
+    url: https://github.com/Bryan-Herrera-DEV/tikvoz/security/advisories/new
+    about: Repórtala en privado, no en un issue público. Ver SECURITY.md.
+  - name: Preguntas frecuentes
+    url: https://github.com/Bryan-Herrera-DEV/tikvoz#preguntas-frecuentes
+    about: Instalación, voces, API key, Kick y más.
