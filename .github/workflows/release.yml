@@ -21,7 +21,7 @@ jobs:
     name: Windows x64
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Verificar que el tag coincide con Cargo.toml
         shell: pwsh
@@ -50,14 +50,14 @@ jobs:
       # Prueba verificable de que el .exe salió de este repo y de este commit
       # (gh attestation verify <archivo> --repo <dueño>/<repo>).
       - name: Atestación de procedencia
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
             dist/*.exe
             dist/*.zip
 
       - name: Publicar release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: TikVoz ${{ github.ref_name }}
           body_path: dist/RELEASE_NOTES.md
