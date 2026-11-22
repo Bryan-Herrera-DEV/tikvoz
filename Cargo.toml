@@ -19,7 +19,7 @@ futures-util = { version = "0.3", default-features = false, features = ["sink", 
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 
 # Protocolo webcast de TikTok (protobuf + gzip).
-prost = "0.13"
+prost = "0.14"
 flate2 = "1"
 
 # Voz local (WinRT/SAPI en Windows, Speech Dispatcher en Linux, AVFoundation en macOS).
