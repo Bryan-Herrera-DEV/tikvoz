@@ -278,7 +278,7 @@ impl Profanity {
             e += 1;
         }
         let covered: Vec<char> = u[s..e].iter().map(|x| x.ch).collect();
-        self.allow.iter().any(|a| *a == covered)
+        self.allow.contains(&covered)
     }
 
     /// Intenta cada regla en `i`; devuelve el índice final (exclusivo).
