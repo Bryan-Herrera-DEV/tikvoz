@@ -14,7 +14,7 @@ jobs:
     name: Lint, tests y build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -29,7 +29,7 @@ jobs:
         if: github.event_name == 'push'
         shell: pwsh
         run: ./scripts/package.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name == 'push'
         with:
           name: tikvoz-${{ github.sha }}-windows-x64
@@ -40,7 +40,7 @@ jobs:
     name: Compila con Rust 1.84 (MSRV)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@1.84
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.120
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked
