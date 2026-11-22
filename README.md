@@ -453,6 +453,17 @@ Medido con el binario de release en Windows 11, con un live real y en modo demo:
 | Latencia de la voz | ~140 ms la primera frase, ~10 ms entre frases |
 | Costo del monitor de consumo | ~1,6 ms por segundo + ~6 MB (contadores de Windows) |
 
+Tiempos de CPU por operación (mediana de [Criterion](https://github.com/bheisler/criterion.rs), `cargo bench`):
+
+| Operación | Tiempo |
+|---|---:|
+| Revisar un comentario contra el filtro de groserías | ~3,5 µs |
+| Limpiar un comentario (links, emojis, repeticiones, diccionario) | ~3,6 µs |
+| Parsear un mensaje de Kick | ~6 µs |
+| Descomprimir y decodificar un lote de 20 comentarios de TikTok | ~18 µs |
+
+Todo lo que se hace con un mensaje antes de leerlo cuesta menos de 0,03 ms, miles de veces menos que la latencia de la voz. Cada pull request se compara contra la rama base en la misma máquina, y el check falla si empeora el rendimiento o el tamaño del `.exe` (ver [CONTRIBUTING](CONTRIBUTING.md#benchmarks-y-rendimiento)).
+
 > [!TIP]
 > La mayor parte de la RAM es el driver de OpenGL, la base de cualquier interfaz acelerada por GPU. Si apagas el monitor en **Avanzado**, su hilo deja de medir.
 
@@ -465,6 +476,7 @@ git clone <url-de-este-repo>
 cd tikvoz
 cargo build --release      # → target/release/tikvoz.exe
 cargo test                 # pruebas unitarias
+cargo bench                # benchmarks (ver CONTRIBUTING)
 pwsh scripts/package.ps1   # → dist/: .exe, .zip, SHA256SUMS.txt y notas (lo mismo que publica CI)
 ```
 
@@ -495,6 +507,7 @@ src/
 ├── profanity.rs     detector de groserías resistente a ofuscación (con tests)
 ├── speech.rs        hilo de voz y cola con prioridad
 ├── monitor.rs       CPU/RAM/GPU del proceso (API nativa de Windows)
+├── lib.rs           biblioteca (la usan main.rs y los benchmarks)
 ├── tiktok/
 │   ├── mod.rs       supervisor con reconexión
 │   ├── api.rs       room id + servidor de firmas

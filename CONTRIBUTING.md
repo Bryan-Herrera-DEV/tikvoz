@@ -13,6 +13,7 @@ Al participar aceptas el [Código de conducta](CODE_OF_CONDUCT.md). Para vulnera
 - [Estilo de código](#estilo-de-código)
 - [Mensajes de commit](#mensajes-de-commit)
 - [Pull requests](#pull-requests)
+- [Benchmarks y rendimiento](#benchmarks-y-rendimiento)
 - [Guías por área](#guías-por-área)
 - [Publicar una versión](#publicar-una-versión)
 
@@ -119,6 +120,61 @@ docs: aclara cómo instalar voces en español
 - CI debe pasar: formato, clippy, tests y compilación con la MSRV.
 - Explica qué cambia, por qué y cómo lo probaste. Si cambia la interfaz, agrega una captura (puedes usar `--demo --config ./tmp` para no mostrar datos reales).
 - Los mantenedores pueden pedir cambios. Al aprobarse, se integra con *squash* o *rebase* para mantener un historial limpio.
+
+## Benchmarks y rendimiento
+
+TikVoz tiene benchmarks con [Criterion](https://github.com/bheisler/criterion.rs) en `benches/rendimiento.rs`. Miden lo que se ejecuta con **cada mensaje del chat**:
+
+| Benchmark | Qué mide |
+|---|---|
+| `groserias/compilar_lista` | Compilar la lista de groserías (al abrir la app o editarla). |
+| `groserias/chat_limpio_20` | Revisar 20 comentarios típicos. |
+| `groserias/chat_ofuscado_10` | Revisar 10 comentarios con groserías ofuscadas. |
+| `groserias/mensaje_largo_300` | Revisar un mensaje de 300 caracteres. |
+| `limpieza/chat_limpio_20` | Limpiar 20 comentarios (links, emojis, repeticiones, diccionario). |
+| `kick/frame_chat` | Parsear un frame real de Kick y traducirlo a evento. |
+| `tiktok/lote_gzip_20_comentarios` | Descomprimir y decodificar un lote de 20 comentarios de TikTok. |
+
+### En cada pull request
+
+El workflow **Benchmarks** compara tu PR contra la rama base **en la misma máquina** con un diseño A-B-A:
+
+1. Mide la base.
+2. Mide tu PR.
+3. Mide la base otra vez.
+
+La diferencia entre las dos mediciones de la base es el **ruido** de cada benchmark en esa máquina. Un benchmark se marca como **regresión** solo si:
+
+- empeora más que `max(10 %, 2 × ruido)`, **y**
+- su intervalo de confianza del 95 % no se solapa con el de ninguna de las dos bases.
+
+Además compara el **tamaño del `.exe`**, que es determinista: falla si crece más de un 5 %.
+
+El resultado aparece como tabla en el resumen del run (pestaña *Actions* → el run → *Summary*), y el check falla si hay una regresión. Los resultados completos de Criterion quedan como artefacto durante 14 días.
+
+Una regresión no significa que el PR se rechace: si el cambio lo justifica (una función nueva que necesita más trabajo), explícalo en el PR y los mantenedores lo evaluarán.
+
+### En tu equipo
+
+```bash
+cargo bench                                  # ejecuta todos
+cargo bench -- groserias                     # solo un grupo
+
+# Comparar tu rama contra main:
+git switch main
+cargo bench -- --save-baseline main
+git switch mi-rama
+cargo bench -- --save-baseline pr
+pwsh scripts/bench-compare.ps1 -Base main -New pr
+```
+
+Para una comparación más fiable, cierra otros programas y repite la medición de `main` al final (`--save-baseline main2`), luego pásala con `-Base2 main2`.
+
+### Reglas
+
+- Si cambias una ruta caliente (filtro, limpieza, parseo de protocolos), ejecuta los benchmarks antes de enviar el PR.
+- Si agregas una ruta caliente nueva, agrega su benchmark.
+- **No renombres benchmarks existentes:** el nombre es la clave para comparar con la base. Para medir algo distinto, crea uno nuevo.
 
 ## Guías por área
 
