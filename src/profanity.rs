@@ -17,16 +17,61 @@
 //!    justo en los bordes de esos fragmentos. Así `pi to` se detecta pero
 //!    `papi tomo` o `computo` no.
 //!
-//! Sintaxis de la lista: una palabra por línea o separadas por coma. `palabra*`
-//! detecta todo lo que empiece así (`pendej*` → pendejo, pendejada…). Sin `*` se
-//! detecta la palabra exacta y su plural (`-s`, `-es`). En el texto, un `*`
-//! funciona como comodín de una letra (`p*ta`).
+//! 7. **Confusables (Unicode UTS #39)**: además de cirílico/griego, versalitas
+//!    (`ᴘɪᴛᴏ`), letras de bandera (`🇵🇮🇹🇴`), letras en recuadro (`🅿🅸🆃🅾`),
+//!    armenio e IPA.
+//! 8. **Controles bidireccionales ("Trojan Source", CVE-2021-42574)**: con `U+202E`
+//!    el texto se *muestra* al revés. Se ignoran y además se prueba el texto
+//!    invertido; lo mismo con el texto "de cabeza" (`oʇᴉd`).
+//! 9. **Rellenos invisibles**: Hangul filler (`ㅤ`), caracteres de etiqueta, etc.
+//!
+//! Sintaxis de la lista (inspirada en Discord AutoMod):
+//! - una palabra por línea o separadas por coma;
+//! - `palabra*` → todo lo que **empiece** así (`pendej*` → pendejo, pendejada…);
+//! - `*palabra` → todo lo que **termine** así;
+//! - `*palabra*` → la palabra **en cualquier parte** (cuidado: más falsos positivos);
+//! - sin `*` → la palabra exacta y su plural (`-s`, `-es`);
+//! - frases con espacios (`hijo de puta`) se detectan aunque las palabras sean largas;
+//! - `[categoria]` en una línea agrupa lo que sigue (se activa/desactiva por grupo,
+//!   como las categorías de Twitch AutoMod).
+//!
+//! La **lista de excepciones** se aplica por coincidencia, no por mensaje: una
+//! palabra permitida no "desactiva" el filtro para el resto del mensaje (un fallo
+//! conocido de Discord AutoMod).
+//!
+//! En el texto, un `*` funciona como comodín de una letra (`p*ta`).
+//!
+//! Lo que NO se hace a propósito: detectar letras desordenadas ("ptio"). Probado
+//! contra el español, marca palabras normales (`carbón` ≈ `cabrón`): es el clásico
+//! problema de Scunthorpe.
 
 use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
 
-/// Lista por defecto (español + algo de inglés). Editable desde la app.
+/// Lista por defecto, por categorías (español + algo de inglés). Editable desde la app.
 pub const DEFAULT_BAD_WORDS: &str = "\
+[insultos]
+puta, puto, putita, putito, putamadre*, putamare*, hdp, hijueput*, hijodeput*, hijoeput*,
+hijo de puta, hija de puta, puta madre, pendej*, cabron*, culer*, marica*, maricon*, joto,
+zorra, perra, idiota, imbecil, estupid*, gilipollas, malparid*, gonorrea, careverga, cojud*,
+mamaguev*, mamahuev*, conchatumadre*, conchetumadre*, conchesumadre*, concha tu madre,
+concha de tu madre, chinga tu madre
+[vulgar]
+verga*, pito, polla, pinga, mierda*, chinga*, culo, coño, follar
+[sexual]
+violar*, violacion, violador*, abuso, pedofil*, porno*
+[odio]
+nazi, sudaca*, negrata*, sidoso*, nigger*, nigga*, faggot*
+[violencia]
+matate, suicidate, muerete, te voy a matar, ojala te mueras
+[abreviaturas]
+ptm, ptmr, ctm, ctmr, csm, alv, vrg, vrga, mrd, mrda, hpta, hpt, pndj*, mmgv
+[ingles]
+fuck*, motherfuck*, shit*, bitch*, cunt*, whore*, rape, rapist*";
+
+/// Lista por defecto de la v0.2 (sin categorías). Se usa para migrar ajustes
+/// guardados: si el usuario no la había tocado, pasa a la nueva automáticamente.
+pub const DEFAULT_BAD_WORDS_V1: &str = "\
 puta, puto, putita, putito, putamadre*, putamare*, hdp, hijueput*, hijodeput*, hijoeput*,
 pendej*, verga*, pito, polla, pinga, mierda*, cabron*, chinga*, culer*, culo,
 marica*, maricon*, joto, zorra, perra, idiota, imbecil, estupid*, gilipollas, malparid*,
@@ -41,20 +86,65 @@ pub struct Hit {
     pub end: usize,
     /// La entrada de la lista que coincidió (tal como la escribió el usuario).
     pub rule: String,
+    /// Categoría de la regla (`[insultos]`, …) o "general".
+    pub category: String,
 }
 
 #[derive(Debug, Clone)]
 struct Rule {
     /// Letras normalizadas con cuántas veces se repiten seguidas ("perra" → r×2).
     pattern: Vec<(char, u8)>,
+    /// `palabra*`: puede seguir cualquier cosa.
     prefix: bool,
+    /// `*palabra`: puede empezar a mitad de una palabra.
+    suffix: bool,
+    /// Frase con espacios: no aplica la heurística de fragmentos cortos.
+    multiword: bool,
     label: String,
+    category: String,
 }
 
 /// Lista compilada. Construirla cuesta algo; se reconstruye solo si la lista cambia.
 #[derive(Debug, Clone, Default)]
 pub struct Profanity {
     rules: Vec<Rule>,
+    /// Excepciones normalizadas (sin repeticiones ni separadores).
+    allow: Vec<Vec<char>>,
+}
+
+const GENERAL: &str = "general";
+
+/// Categorías presentes en una lista, en orden de aparición.
+pub fn categories(list: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for (cat, _) in entries(list) {
+        if !out.contains(&cat) {
+            out.push(cat);
+        }
+    }
+    out
+}
+
+/// (categoría, entrada) de cada elemento de la lista.
+fn entries(list: &str) -> Vec<(String, String)> {
+    let mut category = GENERAL.to_string();
+    let mut out = Vec::new();
+    for line in list.lines() {
+        let line = line.trim();
+        if line.starts_with('[') && line.ends_with(']') && line.len() > 2 {
+            category = line[1..line.len() - 1].trim().to_lowercase();
+            continue;
+        }
+        for w in line.split([',', ';']).map(str::trim).filter(|w| !w.is_empty()) {
+            out.push((category.clone(), w.to_string()));
+        }
+    }
+    out
+}
+
+/// Letras normalizadas de una palabra/frase, sin separadores ni repeticiones.
+fn letters(word: &str) -> Vec<char> {
+    normalize(word).into_iter().map(|u| u.ch).filter(|c| *c != WILDCARD).collect()
 }
 
 /// Letra normalizada con su origen en el texto.
@@ -73,24 +163,46 @@ const WILDCARD: char = '*';
 const CH: char = 'ç';
 
 impl Profanity {
+    /// Atajo sin excepciones ni categorías apagadas (usado en tests).
+    #[cfg(test)]
     pub fn new(list: &str) -> Self {
-        let rules = list
-            .split([',', '\n', ';'])
-            .map(str::trim)
-            .filter(|w| !w.is_empty())
-            .filter_map(|w| {
+        Self::with_options(list, "", &[])
+    }
+
+    /// `allow`: excepciones (coma o línea). `disabled`: categorías apagadas.
+    pub fn with_options(list: &str, allow: &str, disabled: &[String]) -> Self {
+        let rules = entries(list)
+            .into_iter()
+            .filter(|(cat, _)| !disabled.iter().any(|d| d.eq_ignore_ascii_case(cat)))
+            .filter_map(|(category, w)| {
                 let prefix = w.ends_with('*');
-                let base = w.trim_end_matches('*');
+                let suffix = w.starts_with('*');
+                let base = w.trim_matches('*');
+                let multiword = base.split_whitespace().nth(1).is_some();
                 let pattern: Vec<(char, u8)> = normalize(base)
                     .into_iter()
                     .filter(|u| u.ch != WILDCARD)
                     .map(|u| (u.ch, u.count))
                     .collect();
                 // Patrones de menos de 3 letras dan demasiados falsos positivos.
-                (pattern.len() >= 3).then(|| Rule { pattern, prefix, label: w.to_string() })
+                (pattern.len() >= 3).then_some(Rule {
+                    pattern,
+                    prefix,
+                    suffix,
+                    multiword,
+                    label: w,
+                    category,
+                })
             })
             .collect();
-        Self { rules }
+        let allow = allow
+            .split([',', '\n', ';'])
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+            .map(letters)
+            .filter(|l| !l.is_empty())
+            .collect();
+        Self { rules, allow }
     }
 
     pub fn contains(&self, text: &str) -> bool {
@@ -118,17 +230,33 @@ impl Profanity {
         if self.rules.is_empty() {
             return Vec::new();
         }
+        let hits = self.find_in(text);
+        if !hits.is_empty() {
+            return hits;
+        }
+        // Texto que se *ve* distinto de como está escrito: lo leemos como se ve.
+        for alt in alternate_readings(text) {
+            if let Some(h) = self.find_in(&alt).into_iter().next() {
+                return vec![Hit { start: 0, end: text.len(), ..h }];
+            }
+        }
+        Vec::new()
+    }
+
+    fn find_in(&self, text: &str) -> Vec<Hit> {
         let units = normalize(text);
         let mut hits = Vec::new();
         let mut i = 0;
         while i < units.len() {
             let token_start = i == 0 || units[i - 1].token != units[i].token;
-            if token_start {
-                if let Some((end, rule)) = self.match_at(&units, i) {
+            if let Some((end, rule)) = self.match_at(&units, i, token_start) {
+                let start = if token_start { i } else { token_begin(&units, i) };
+                if !self.is_allowed(&units, start, end) {
                     hits.push(Hit {
-                        start: units[i].start,
+                        start: units[start].start,
                         end: units[end - 1].end,
                         rule: rule.label.clone(),
+                        category: rule.category.clone(),
                     });
                     i = end;
                     continue;
@@ -139,11 +267,25 @@ impl Profanity {
         hits
     }
 
-    /// Intenta cada regla empezando en `i`; devuelve el índice final (exclusivo).
-    fn match_at<'a>(&'a self, u: &[Unit], i: usize) -> Option<(usize, &'a Rule)> {
+    /// ¿Lo detectado (extendido a palabras completas) está en las excepciones?
+    fn is_allowed(&self, u: &[Unit], start: usize, end: usize) -> bool {
+        if self.allow.is_empty() {
+            return false;
+        }
+        let s = token_begin(u, start);
+        let mut e = end;
+        while e < u.len() && u[e].token == u[e - 1].token {
+            e += 1;
+        }
+        let covered: Vec<char> = u[s..e].iter().map(|x| x.ch).collect();
+        self.allow.iter().any(|a| *a == covered)
+    }
+
+    /// Intenta cada regla en `i`; devuelve el índice final (exclusivo).
+    fn match_at<'a>(&'a self, u: &[Unit], i: usize, token_start: bool) -> Option<(usize, &'a Rule)> {
         // Preferimos la coincidencia más larga (p. ej. "putamadre" sobre "puta").
         let mut best: Option<(usize, &Rule)> = None;
-        for rule in &self.rules {
+        for rule in self.rules.iter().filter(|r| token_start || r.suffix) {
             let Some(end) = match_rule(u, i, rule) else { continue };
             if best.is_none_or(|(e, _)| end > e) {
                 best = Some((end, rule));
@@ -192,10 +334,62 @@ fn match_rule(u: &[Unit], i: usize, rule: &Rule) -> Option<usize> {
         }
     }
 
-    if !plausible_split(u, i, end) {
+    if !rule.multiword && !plausible_split(u, i, end) {
         return None;
     }
     Some(end)
+}
+
+/// Índice de la primera letra del fragmento que contiene `i`.
+fn token_begin(u: &[Unit], mut i: usize) -> usize {
+    while i > 0 && u[i - 1].token == u[i].token {
+        i -= 1;
+    }
+    i
+}
+
+/// Lecturas alternativas de textos que se muestran distinto de como se escriben.
+fn alternate_readings(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    // Override bidireccional: lo que sigue se muestra de derecha a izquierda.
+    if text.chars().any(|c| matches!(c, '\u{202E}' | '\u{202B}' | '\u{2067}')) {
+        out.push(text.chars().rev().collect());
+    }
+    // Texto "de cabeza" (ɐ, ǝ, ʇ…): se lee al revés y con cada letra girada.
+    if text.chars().any(|c| "ɐǝɔɟƃɥᴉɾʞɯɹʇʌʍʎ".contains(c)) {
+        out.push(text.chars().rev().map(unflip).collect());
+    }
+    out
+}
+
+/// Letra "de cabeza" → letra normal.
+fn unflip(c: char) -> char {
+    match c {
+        'ɐ' => 'a',
+        'q' => 'b',
+        'ɔ' => 'c',
+        'p' => 'd',
+        'ǝ' => 'e',
+        'ɟ' => 'f',
+        'ƃ' => 'g',
+        'ɥ' => 'h',
+        'ᴉ' | 'ı' => 'i',
+        'ɾ' => 'j',
+        'ʞ' => 'k',
+        'ɯ' => 'm',
+        'u' => 'n',
+        'd' => 'p',
+        'b' => 'q',
+        'ɹ' => 'r',
+        'ʇ' => 't',
+        'n' => 'u',
+        'ʌ' => 'v',
+        'ʍ' => 'w',
+        'ʎ' => 'y',
+        '¡' => '!',
+        '¿' => '?',
+        other => other,
+    }
 }
 
 /// Si la coincidencia abarca varios fragmentos ("pi to"), solo la aceptamos cuando
@@ -234,12 +428,70 @@ fn plausible_split(u: &[Unit], start: usize, end: usize) -> bool {
 /// Caracteres que no ocupan espacio visual: se ignoran por completo.
 fn is_invisible(c: char) -> bool {
     matches!(c, '\u{200B}'..='\u{200F}' | '\u{2060}'..='\u{2064}' | '\u{FEFF}' | '\u{00AD}' | '\u{034F}' | '\u{180E}')
+        // controles bidireccionales (Trojan Source)
+        || matches!(c, '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{061C}')
+        // rellenos Hangul y Khmer que se ven como nada (muy usados en nicks "vacíos")
+        || matches!(c, '\u{3164}' | '\u{FFA0}' | '\u{115F}' | '\u{1160}' | '\u{17B4}' | '\u{17B5}')
+        // caracteres de etiqueta
+        || ('\u{E0000}'..='\u{E007F}').contains(&c)
         || is_combining_mark(c)
         || ('\u{FE00}'..='\u{FE0F}').contains(&c)
 }
 
+/// Letras de bandera (🇦), en círculo negro (🅐) y en recuadro negro (🅰): NFKC no las convierte.
+fn enclosed_letter(c: char) -> Option<char> {
+    let base = match c {
+        '\u{1F1E6}'..='\u{1F1FF}' => 0x1F1E6,
+        '\u{1F150}'..='\u{1F169}' => 0x1F150,
+        '\u{1F170}'..='\u{1F189}' => 0x1F170,
+        _ => return None,
+    };
+    char::from_u32('a' as u32 + (c as u32 - base))
+}
+
 fn homoglyph(c: char) -> Option<char> {
+    if let Some(l) = enclosed_letter(c) {
+        return Some(l);
+    }
     Some(match c {
+        // versalitas (NFKC no las convierte)
+        'ᴀ' => 'a',
+        'ʙ' => 'b',
+        'ᴄ' => 'c',
+        'ᴅ' => 'd',
+        'ᴇ' => 'e',
+        'ꜰ' => 'f',
+        'ɢ' => 'g',
+        'ʜ' => 'h',
+        'ɪ' => 'i',
+        'ᴊ' => 'j',
+        'ᴋ' => 'k',
+        'ʟ' => 'l',
+        'ᴍ' => 'm',
+        'ɴ' => 'n',
+        'ᴏ' => 'o',
+        'ᴘ' => 'p',
+        'ǫ' => 'q',
+        'ʀ' => 'r',
+        'ꜱ' => 's',
+        'ᴛ' => 't',
+        'ᴜ' => 'u',
+        'ᴠ' => 'v',
+        'ᴡ' => 'w',
+        'ʏ' => 'y',
+        'ᴢ' => 'z',
+        // IPA, armenio y cirílico extra (subconjunto de confusables.txt de UTS #39)
+        'ɑ' => 'a',
+        'ɡ' | 'ց' => 'g',
+        'ɩ' => 'i',
+        'ԁ' => 'd',
+        'ԛ' => 'q',
+        'ԝ' => 'w',
+        'ӏ' => 'l',
+        'օ' => 'o',
+        'ս' => 'u',
+        'ո' => 'n',
+        'հ' => 'h',
         'а' | 'α' => 'a',
         'в' | 'β' => 'b',
         'с' | 'ς' => 'c',
@@ -441,6 +693,69 @@ mod tests {
         let f = p();
         assert_eq!(f.censor("eres un pi to jaja", "piip"), "eres un piip jaja");
         assert_eq!(f.censor("hola 4buso!", "piip"), "hola piip!");
+    }
+
+    #[test]
+    fn detecta_trucos_unicode_avanzados() {
+        let f = p();
+        for t in [
+            "ᴘɪᴛᴏ",                 // versalitas
+            "🇵🇮🇹🇴",               // letras de bandera
+            "🅿🅸🆃🅾",              // recuadro negro
+            "🅟🅘🅣🅞",              // círculo negro
+            "\u{202E}otip",         // override RTL: se ve "pito"
+            "oʇᴉd",                 // de cabeza
+            "pu\u{3164}to",         // relleno Hangul invisible
+            "pu\u{E0020}to",        // carácter de etiqueta
+        ] {
+            assert!(f.contains(t), "debió detectar: {t:?}");
+        }
+    }
+
+    #[test]
+    fn frases_abreviaturas_y_categorias() {
+        let f = p();
+        for t in ["hijo de puta", "la concha de tu madre", "te voy a matar", "ptm", "alv", "CTM wey"] {
+            assert!(f.contains(t), "debió detectar: {t:?}");
+        }
+        for t in ["Álvaro", "hijo de Pedro", "voy a matar el tiempo", "carbón", "cosmos"] {
+            assert!(!f.contains(t), "falso positivo: {t:?} -> {:?}", f.find(t));
+        }
+        assert_eq!(f.find("pito").first().map(|h| h.category.as_str()), Some("vulgar"));
+        let sin_vulgar = Profanity::with_options(DEFAULT_BAD_WORDS, "", &["vulgar".into()]);
+        assert!(!sin_vulgar.contains("pito"));
+        assert!(sin_vulgar.contains("puto"));
+        assert_eq!(
+            categories(DEFAULT_BAD_WORDS),
+            ["insultos", "vulgar", "sexual", "odio", "violencia", "abreviaturas", "ingles"]
+        );
+    }
+
+    #[test]
+    fn comodines_estilo_discord() {
+        let f = Profanity::new("*ota, *gato*");
+        assert!(f.contains("idiota"));
+        assert!(!f.contains("otario"));
+        assert!(f.contains("supergatote"));
+        assert_eq!(f.censor("mi supergatote", "piip"), "mi piip");
+    }
+
+    #[test]
+    fn excepciones_por_coincidencia_no_por_mensaje() {
+        let f = Profanity::with_options("culo, puto", "culo", &[]);
+        assert!(!f.contains("qué culo"));
+        // La excepción no apaga el filtro para el resto del mensaje.
+        assert!(f.contains("culo puto"));
+        assert_eq!(f.censor("culo puto", "piip"), "culo piip");
+    }
+
+    #[test]
+    fn lista_v1_sigue_detectando_lo_mismo() {
+        let v1 = Profanity::new(DEFAULT_BAD_WORDS_V1);
+        let v2 = p();
+        for t in ["pito", "4buso", "hijueputa", "kabron", "shit", "nazi"] {
+            assert!(v1.contains(t) && v2.contains(t), "{t}");
+        }
     }
 
     #[test]
