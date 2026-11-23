@@ -23,8 +23,15 @@ use tokio::task::JoinHandle;
 
 use crate::live::{Backoff, Emit, LiveEvent, Platform, Status};
 
-const USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 \
-     (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+/// User-Agent honesto. NO usar uno de navegador: Cloudflare compara el
+/// User-Agent con la huella real del cliente (TLS de rustls, HTTP/1.1), y un
+/// "Chrome" que no se comporta como Chrome se bloquea con 403 "Request blocked
+/// by security policy". Identificarse como lo que somos sí se acepta.
+const USER_AGENT: &str = concat!(
+    "tikvoz/",
+    env!("CARGO_PKG_VERSION"),
+    " (+https://github.com/Bryan-Herrera-DEV/tikvoz)"
+);
 const ORIGIN: &str = "https://kick.com";
 const CHANNEL_API: &str = "https://kick.com/api/v2/channels";
 const REALTIME_CONFIG_URL: &str = "https://web.kick.com/api/v1/realtime/connection";
