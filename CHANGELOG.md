@@ -5,6 +5,11 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [1.0.1] - 2026-11-22
+
+### Corregido
+- **Kick:** al conectar, la app mostraba "Kick respondió 403 Forbidden al buscar el canal" aunque el canal existiera. Cloudflare bloqueaba las peticiones porque el cliente se presentaba como Chrome sin serlo; ahora se identifica como `tikvoz/<versión>`.
+
 ### Agregado
 - Benchmarks con Criterion de las rutas que recorre cada mensaje (filtro de groserías, limpieza, Kick, TikTok).
 - Workflow **Benchmarks**: cada pull request se compara contra su rama base en la misma máquina (diseño A-B-A con control de ruido) y falla si empeora el rendimiento o el tamaño del `.exe`.
@@ -55,5 +60,6 @@ Primera versión estable. 🎉
 - Modo portable (`--config <carpeta>`) y acceso directo (`tikvoz.exe usuario --kick canal`).
 - Un solo `.exe` de ~7 MB, ~100 MB de RAM y < 1 % de CPU.
 
-[Sin publicar]: ../../compare/v1.0.0...HEAD
+[Sin publicar]: ../../compare/v1.0.1...HEAD
+[1.0.1]: ../../compare/v1.0.0...v1.0.1
 [1.0.0]: ../../releases/tag/v1.0.0
