@@ -5,6 +5,22 @@ El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/) y e
 
 ## [Sin publicar]
 
+## [1.0.2] - 2026-11-26
+
+### Cambiado
+- Dependencias actualizadas (Dependabot, integradas en #7):
+  - `tokio-tungstenite` 0.26 → 0.29 (WebSocket de TikTok y Kick);
+  - `prost` 0.13 → 0.14 (protocolo de TikTok);
+  - `windows-sys` 0.59 → 0.61 (monitor de consumo);
+  - `criterion` 0.5 → 0.7 (benchmarks).
+- GitHub Actions: `checkout` v7, `upload-artifact` v7, `attest-build-provenance` v4 y `action-gh-release` v3 (runtime Node 24).
+
+### Corregido
+- El monitor de GPU/VRAM no compilaba con `windows-sys` 0.61, que cambió el tipo de los handles de PDH.
+- El job de MSRV vuelve a usar Rust 1.84; Dependabot lo había cambiado por error y ya no lo actualiza.
+
+Sin cambios de rendimiento: el workflow de benchmarks no detectó regresiones y el `.exe` queda igual (6,6 MB).
+
 ## [1.0.1] - 2026-11-22
 
 ### Corregido
@@ -60,6 +76,7 @@ Primera versión estable. 🎉
 - Modo portable (`--config <carpeta>`) y acceso directo (`tikvoz.exe usuario --kick canal`).
 - Un solo `.exe` de ~7 MB, ~100 MB de RAM y < 1 % de CPU.
 
-[Sin publicar]: ../../compare/v1.0.1...HEAD
+[Sin publicar]: ../../compare/v1.0.2...HEAD
+[1.0.2]: ../../compare/v1.0.1...v1.0.2
 [1.0.1]: ../../compare/v1.0.0...v1.0.1
 [1.0.0]: ../../releases/tag/v1.0.0
