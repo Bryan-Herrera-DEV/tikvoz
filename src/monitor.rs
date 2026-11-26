@@ -111,7 +111,8 @@ mod win {
     use windows_sys::Win32::Foundation::FILETIME;
     use windows_sys::Win32::System::Performance::{
         PdhAddEnglishCounterW, PdhCloseQuery, PdhCollectQueryData, PdhGetFormattedCounterArrayW,
-        PdhOpenQueryW, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_MORE_DATA,
+        PdhOpenQueryW, PDH_FMT_COUNTERVALUE_ITEM_W, PDH_FMT_DOUBLE, PDH_HCOUNTER, PDH_HQUERY,
+        PDH_MORE_DATA,
     };
     use windows_sys::Win32::System::ProcessStatus::{
         GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS, PROCESS_MEMORY_COUNTERS_EX,
@@ -191,9 +192,10 @@ mod win {
     }
 
     pub struct GpuMeter {
-        query: isize,
-        engines: isize,
-        memory: isize,
+        // Alias de windows-sys: eran `isize` hasta la 0.59 y son punteros desde la 0.60.
+        query: PDH_HQUERY,
+        engines: PDH_HCOUNTER,
+        memory: PDH_HCOUNTER,
     }
 
     // Los handles de PDH solo se usan desde el hilo del monitor.
@@ -203,12 +205,12 @@ mod win {
         pub fn new(pid: u32) -> Option<Self> {
             // SAFETY: llamadas FFI con punteros a variables locales válidas.
             unsafe {
-                let mut query = 0isize;
+                let mut query: PDH_HQUERY = std::ptr::null_mut();
                 if PdhOpenQueryW(std::ptr::null(), 0, &mut query) != 0 {
                     return None;
                 }
-                let mut engines = 0isize;
-                let mut memory = 0isize;
+                let mut engines: PDH_HCOUNTER = std::ptr::null_mut();
+                let mut memory: PDH_HCOUNTER = std::ptr::null_mut();
                 let p1 = wide(&format!(r"\GPU Engine(pid_{pid}_*)\Utilization Percentage"));
                 let p2 = wide(&format!(
                     r"\GPU Process Memory(pid_{pid}_*)\Dedicated Usage"
@@ -263,7 +265,7 @@ mod win {
         }
     }
 
-    fn read_array(counter: isize) -> Vec<(String, f64)> {
+    fn read_array(counter: PDH_HCOUNTER) -> Vec<(String, f64)> {
         // SAFETY: protocolo estándar de PDH (pedir tamaño, reservar, leer); el
         // buffer se reserva alineado a la estructura de items.
         unsafe {
