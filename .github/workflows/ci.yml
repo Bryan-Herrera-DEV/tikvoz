@@ -41,6 +41,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@1.120
+      # 1.84 es la MSRV del proyecto (Cargo.toml: rust-version), no una versión
+      # de la acción: Dependabot la ignora (ver .github/dependabot.yml).
+      - uses: dtolnay/rust-toolchain@1.84
       - uses: Swatinem/rust-cache@v2
       - run: cargo check --locked

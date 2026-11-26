@@ -21,6 +21,10 @@ updates:
       interval: monthly
     commit-message:
       prefix: "ci"
+    ignore:
+      # En dtolnay/rust-toolchain el "tag" es la versión de Rust (@1.84 = MSRV),
+      # no la versión de la acción: actualizarla rompería el job de MSRV.
+      - dependency-name: "dtolnay/rust-toolchain"
     groups:
       acciones:
         patterns: ["*"]
